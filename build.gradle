@@ -1,0 +1,114 @@
+println 'This is executed during the configuration phase.'
+
+//定义默认的task直接使用gradle 命令即可以执行
+//gradle 带task参数时执行指定参数的Task 不带task参数时则执行默认的task
+defaultTasks 'DefaultTask1','DefaultTask2'
+
+task DefaultTask1{
+    doFirst{
+        println "DefaultTask1 doFirst"
+    }
+}
+
+task DefaultTask2{
+    doFirst{
+        println "DefaultTask2 doFirst"
+    }
+}
+
+task configured {
+    println 'This is also executed during the configuration phase.'
+}
+
+task test {
+
+    doLast{
+        println 'This is executed during the execution phase.'
+    }
+}
+
+task testBoth {
+    doFirst {
+      println 'This is executed first during the execution phase.'
+    }
+    doLast {
+      println 'This is executed last during the execution phase.'
+    }
+    println 'This is executed during the configuration phase as well.'
+}
+
+//没有Action的Task则无论什么时候都会被执行(即在configuration时便会执行其内部的语句）
+task noActionTask{
+    println "I am no Action Task!"
+}
+
+task TaskA{
+    ext.property = "TaskA Property"
+    doFirst{
+        println 'TaskA doFirst'
+    }
+
+    doLast{
+        println 'TaskA doLast'
+    }
+}
+//dependsOn 建立task之间的依赖关系
+//使用$符号作为Task的属性
+task TaskB(dependsOn:"TaskA"){
+    doFirst{
+        println "TaskB doFirst $TaskB.name"
+//        定一TaskA的属性 从TaskB中获取
+        println "Get TaskA Property from TaskB: $TaskA.property"
+    }
+}
+
+//动态生成task
+4.times {counter->
+    task "task$counter"{
+        doFirst{
+            println "I am task$counter doFirst"
+        }
+}}
+
+//在task外部定义task之间的依赖关系(被依赖的task按照task名称的字典顺序被先后执行)
+task0.dependsOn task2,task1,task3
+
+repositories{
+    maven{
+        url "www.google.com"
+    }
+}
+
+//调用apply方法，传入一个map
+//apply plugin:"com.android.application"
+
+allprojects{
+    repositories{
+        google()
+    }
+}
+
+dependencies{
+//    compile ""
+}
+
+//创建目录树打印出当前目录树的所有文件
+def filetree = fileTree("./")
+filetree.each {
+    println it.getAbsolutePath()
+}
+
+//copy 类型的Task可以很方便的进行任务的Copy操作
+task SeflCopyTask(type:Copy){
+    from './'
+    into './new/'
+}
+//Wrapper的Task用于生成 wrapper目录 和 gradlew以及gradlew.bat文件
+task createWrapper(type:Wrapper){
+    gradleVersion='4.4'
+}
+
+//为所有子项目注入相应的配置
+subprojects{
+
+}
