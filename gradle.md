@@ -80,10 +80,50 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
    ->创建RunBuildAction对象时传递的ServiceRegistry参数,通常情况下是DefaultServiceRegistry.
    ServiceRegistryBuilder#build->构建DefaultServiceRegistry->调用DefaultServiceRegistry#addProvider->调用DefaultServiceRegistry#findProviderMethods->调用RelevantMethods查找addProvider的以configure,create,decorator开头的方法
    
+           ->Service服务被分为三类 create(创建服务,服务当中以create开头的方法),configure(配置服务,服务当中以configure开头的方法),decorator(装饰服务,服务当中以create,或者decorate 开头的方法,且方法参数类型 和 返回类型 相同的方法)
+           
+           ->DefaultServiceRegistry#findProviderMethods查找完成所有Provider Object(服务的提供方)的方法之后将 Method 与 Object对象封装成 ServiceMethod实例,DefaultServiceRegistry再将
+           ServiceMethod 封装一次形成FactoryMethodService将其加入,DefaultServiceRegistry#ownServices中进行缓存.然后将所有需要configure的方法运行一次,configure方法需要的参数在其他Service的提供方进行查找
+           
+   ->适配包装一层RunBuildAction之后,CommandLineActionFactory执行的Action#execute方法实际执行的是RunBuildAction的run方法.
+   
+           ->在BuildActionFactory#runBuildInProcess方法,构建RunBuildAction时第三个参数传递进入的BuildExecutor是通过DefaultRegistry去获取的,实际调用的是
+           ToolingGlobalScopeServices#createBuildExecuter 去构造的Executor.ToolingGlobalScopeServices是在GlobalScopeServices#configure的时候被添加进入的.
+           (*实际的操作是读取gradle-launcher-4.1.jar 中/META-INF/services/目录下的配置文件完成反射获取的*参见DefaultServiceLocator#findServiceImplementations)
+           
+           ->LauncherServices中的ToolingGlobalScopeService#createBuildExecutor层层包装,返回给RunBuildAction的BuildExecutor为SetupLoggingActionExecuter,
+           SetupLoggingActionExecuter内部层层包装各种BuildExecutor,
+           
+           ->中间的Executor做的工作为添加日志,捕捉执行异常打印,校验执行路径是否正确 等工作.InProcessBuildActionExecutor的工作重点为执行GradleLauncher.
+           先通过上下文的ServiceRegistry获取到BuildStateRegistry
+           然后通过BuildStateRegistry获取到RootBuildState(通常是DefaultRootBuildState)
+           DefaultRootBuildState通过GradleLauncherFactory获取到GradleLauncher(通常是DefaultGradleLauncher)
+           RootBuildState会将GradleLauncher包装一层形成形成GradleBuildController
+           
+           ->BuildController向下传递进入SubscribableBuildActionRunner最终进入ChainingBuildActionRunner,交由LauncherService创建时提供的BuildRunnerActions依次执行传递给其buildController.
+           
+           ->随后进入DefaultGradleLauncher的执行流程 调用DefaultGradleLauncher#executeTasks 进入Build构建流程
    
 2. EntryPoint:有两个子类分别是Main 与DaemonMain
 
+## OtherTips
+1.UserHomeInitScriptFinder 查找gradle安装目录下 init.d 目录中的初始化gradle(即该目录下以 .gradle 与 gradle.kts 结尾的文件).
 
+## Gradle中的架构接口整理
+1.BuildAction(I)
+2.BuildActionExecutor(I)<----BuildExecutor<BuildActionParameters>(I)
+3.BuildActionRunner(I)
+4.BuildState(I) 
 ##Groovy Tips 
 1. 同Kotlin一样定义plus的对象则可以使用+算术运算附，对两个对象进行运算。  
+
+##Problem 
+1. (resolved) build.gradle (Project) 和 Task 对象中调用ext是什么语法?
+   在build.gradle 中 使用 ext{} ext.key="value" 等语法,为获取Project的 ExtensionsContainer,然后传递闭包调用,或者直接向自己的ExtensionsContainer添加键值对的值
+   在task中使用ext 基本同在build.gradle使用ext关键字.
+   通常在Task或者Project中获取到的ExtensionsContainer为 org.gradle.api.internal.plugins.DefaultConvention的实例.
+   使用获取到的ExtensionsContainer获取的ext 通常为 DefaultExtraPropertiesExtension
+   ext 代表 ExtensionContainer中的key为ext value为DefaultExtraPropertiesExtension的实例.参见ExtraPropertiesExtension#EXTENSION_NAME 变量
+   大多数情况下我们可以自己向ExtensionContainer中添加自己的key 与 value值.
+
 

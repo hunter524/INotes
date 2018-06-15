@@ -1,5 +1,7 @@
 println 'This is executed during the configuration phase.'
 
+
+
 //定义默认的task直接使用gradle 命令即可以执行
 //gradle 带task参数时执行指定参数的Task 不带task参数时则执行默认的task
 defaultTasks 'DefaultTask1','DefaultTask2'
@@ -93,10 +95,10 @@ dependencies{
 }
 
 //创建目录树打印出当前目录树的所有文件
-def filetree = fileTree("./")
-filetree.each {
-    println it.getAbsolutePath()
-}
+//def filetree = fileTree("./")
+//filetree.each {
+//    println it.getAbsolutePath()
+//}
 
 //copy 类型的Task可以很方便的进行任务的Copy操作
 task SeflCopyTask(type:Copy){
@@ -107,6 +109,32 @@ task SeflCopyTask(type:Copy){
 task createWrapper(type:Wrapper){
     gradleVersion='4.4'
 }
+
+task TryZip(type: Zip){
+    from "gradlew"
+    doFirst{
+       println "task TryZip"
+        def val = rootProject.extensions.ext.key + rootProject.ext.key2
+        println "Value is $val"
+
+        println "Type of extensions${rootProject.extensions.getClass()}"
+
+        println "Type of extensions.ext: ${rootProject.extensions.ext.getClass()}"
+
+        println "Add Extensions: ${rootProject.extensions.getByName("ke")}"
+
+    }
+}
+
+extensions.add("ke","ve")
+
+ext{
+    key="value"
+}
+ext.key2 = "value2"
+
+//????直接使用task名字去添加依赖关系 这是什么语法?
+TryZip.dependsOn task0
 
 //为所有子项目注入相应的配置
 subprojects{

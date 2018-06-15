@@ -1,7 +1,7 @@
 #JetPack
 ## SomeThings
 1. Support V7 包的27版本,集成了LifeCycle 和LifeOwner 无需自己去手动导入相关的依赖.
-2. 使用android.arch.lifecycle:reactivestreams库,可以将RxJava2 与LiveData集成使用
+2. 使用android.arch.lifecycle:reactivestreams库,可以将RxJava2 与LiveData集成使用.将LiveData转换成RxJava2的Publisher 
 3. tips:guide to app architecture 中的webservice直接返回一个MutableLiveData,然后异步执行请求去设置数据并无问题,因为LiveData设置数据时才会去更新界面.
 ## ViewModel
 1. ViewModel的创建是通过ViewModelProvider.Factory接口的实例创建的,该接口的实现目前有两种:AndroidViewModelFactory和NewInstanceFactory.
@@ -17,6 +17,10 @@
 
 ## LiveData
 1. LiveData在观察的时候需要传入一个LifeCycleOwner 实例便于观察组件的生命周期.
+   LiveData的直接子类由MediatorLiveData,MutableLiveData.
+   MutableLiveData:为普通的可以被修改和观察的数据,结合了LifeCycle的生命周期控制
+   
+
 
 ## LifeCycle
 1. 27版本的Support v4包中,Fragment 以及FragmentActivity 均实现了LifeCycleOwner接口,getLifeCycle返回的均为LifecycleRegistry的实例用于管理(LiveData,ViewModel的生命周期)
