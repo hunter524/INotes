@@ -1,3 +1,12 @@
+//apply plugin: 'java'
+//plugins 语句块需要放在build.gradle的顶部第一行(可以替代apply plugin:'java' 语句
+
+
+//tips:只有buildScript 和 plugins 语句块自己能处于plugins之前
+plugins{
+//    id 'java'
+    id 'org.gradle.java'
+}
 println 'This is executed during the configuration phase.'
 
 
@@ -14,7 +23,7 @@ task DefaultTask1{
 
 task DefaultTask2{
     doFirst{
-        println "DefaultTask2 doFirst"
+        println "DefaultTask2 doFirst!"
     }
 }
 
@@ -22,12 +31,12 @@ task configured {
     println 'This is also executed during the configuration phase.'
 }
 
-task test {
-
-    doLast{
-        println 'This is executed during the execution phase.'
-    }
-}
+//task test {
+//
+//    doLast{
+//        println 'This is executed during the execution phase.'
+//    }
+//}
 
 task testBoth {
     doFirst {
@@ -62,6 +71,8 @@ task TaskB(dependsOn:"TaskA"){
 //        定一TaskA的属性 从TaskB中获取
         println "Get TaskA Property from TaskB: $TaskA.property"
     }
+
+    println("I am a TaskB Method!")
 }
 
 //动态生成task
@@ -126,6 +137,48 @@ task TryZip(type: Zip){
     }
 }
 
+//打印startParameter参数
+//def startParameter = gradle.startParameter.toString()
+//println "StartParameter: ${startParameter}"
+
+gradle.taskGraph.whenReady {
+    def taskSize = gradle.taskGraph.getAllTasks().size()
+    println "TaskSize : ${taskSize}"
+
+//    通过名称获取TaskB
+    def taskBSet = project.getTasksByName(("TaskB"),false)
+    println "GetTaskByName: ${taskBSet.size()}"
+//    通过TaskB 获取TaskB的依赖Task !!!!!todo:目前无法获取到该TaskB getDependencies是从4.6开始有的
+//    def dependsTaskSize = gradle.taskGraph.getDependencies(taskBSet[0] as Task).size()
+//    println "TaskDepends Size: ${dependsTaskSize}"
+
+//    打印当前的Project的类型:DefaultProject_Decorated todo://什么时候创建的?
+    println "Project Type: ${project.getClass().getCanonicalName()}"
+//    打印gradle
+    println "Gradle type: ${gradle.getClass().getCanonicalName()}"
+
+//    获取getConfigurationActions
+//    println "ConfigurationActions: ${project.getConfigurations()}"
+
+//    获取当前Task的类 类型
+    println "Task Type :${taskBSet[0].getClass().getCanonicalName()}"
+
+    def list = ['a','b','c','d','e','f','g']
+    def closure = {
+        it.toUpperCase()
+    }
+    println "Closure this : ${closure.getThisObject()}"
+//    println "Closure owner: ${closure.getOwner()}"
+//    println "Closure delegate: ${closure.getDelegate()}"
+    def listUpper = list.collect closure
+    println "UpperList: ${listUpper}"
+//获取task 然后使用task
+    def taskB =project.tasks.getByName("TaskB")
+    println "Task :${taskB.project}"
+
+}
+
+
 extensions.add("ke","ve")
 
 ext{
@@ -140,3 +193,75 @@ TryZip.dependsOn task0
 subprojects{
 
 }
+
+dependencies{
+
+    compile "org.hibernate:hibernate:3.1"
+    println("DDDD")
+}
+
+
+//输出:org.gradle.api.plugins.JavaPlugin@240e96eb
+//def java = getPlugins().getPlugin("java")
+//println(java)
+
+//直接使用task的名称引用定义的Task 并且输出其名称
+println("taskB name:${task("taskB")}")
+//通过Project的property方法获得对象
+println("taskB name(via Project#property): ${property("taskB")}")
+//如果定义了ext.taskB则通过property获取到的则是ext定义的扩展字段,property的获取是有顺序的,上层存在该值则不会取下层的值
+project.ext.taskB = "I am TaskB ext!"
+println("defin ext.taskB !taskB name(via Project#property): ${property("taskB")}")
+
+//定义一个闭包作为ext的参数,然后获取该闭包并且执行
+project.ext.closure = {println "execute ext closure"}
+//获取定义的闭包并且执行
+//property("closure")()
+
+//直接通过动态方法进行执行
+closure()
+
+//build.gradle 内部可以调用的动态方法 (动态方法的寻找策略,task也可以作为一个方法被调用,需要传出Closure)
+task taskFunc(){
+    println "println taskFunc"
+}
+
+taskFunc({println "task execute closure"})
+
+//println("Convention ${project.getConvention().getPlugin(JavaPluginConvention.class)}")
+
+
+//验证通过 apply plugin:'java' 与 apply plugin: 'org.gradle.plugin'插件是否是同一个插件
+//通过两种不同的id导入的插件其实是同一个插件
+//println("Java Plugin: ${project.getPlugins().getPlugin('java')}")
+
+//遍历当前的所持有的Plugin
+println("Plugins: ${project.getPlugins().each { println "Each Plugin: ${it}" }}")
+//遍历所有当前持有的Convention
+project.getConvention().getPlugins().each {println "Each Convention: ${it.getValue()}"}
+
+
+//4.6的gradle才可以使用 gradle.getTaskGraph().getDependencies 方法
+//rootProject.gradle.taskGraph.whenReady { gradle.getTaskGraph().getDependencies(project.getTasksByName("taskB",false)[0])}
+println "Dependence Graph: "
+
+//定义一个自己的Convention加入Project
+
+//便可以在Project内部调用Convention的方法了
+class SelfDefinitionConvention{
+    public void selfDefinition(){
+        println("call self definition!!!")
+    }
+}
+
+project.getConvention().getPlugins().put("sefl.definition",new SelfDefinitionConvention())
+
+selfDefinition()
+
+//ext 是在DefaultConvention中定义的
+//build.gradle 中用户自己添加的ke也可以直接使用Project的property方法获取到 extensions.add("ke","ve")
+println "just get property ${project.ke}"
+
+//hook 查看System Property 属性
+def property = System.getProperty("org.gradle.appname","test")
+println "Property: ${property}"

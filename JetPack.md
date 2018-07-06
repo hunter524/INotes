@@ -5,6 +5,7 @@
 3. tips:guide to app architecture 中的webservice直接返回一个MutableLiveData,然后异步执行请求去设置数据并无问题,因为LiveData设置数据时才会去更新界面.
 ## ViewModel
 1. ViewModel的创建是通过ViewModelProvider.Factory接口的实例创建的,该接口的实现目前有两种:AndroidViewModelFactory和NewInstanceFactory.
+
 继承自AndroidViewModel的ViewModel使用AndroidViewModelFactory进行创建.
 继承自ViewModel的ViewModel通过NewInstanceFactory进行创建.
 
@@ -25,3 +26,6 @@
 ## LifeCycle
 1. 27版本的Support v4包中,Fragment 以及FragmentActivity 均实现了LifeCycleOwner接口,getLifeCycle返回的均为LifecycleRegistry的实例用于管理(LiveData,ViewModel的生命周期)
    v4包中的Fragment Activity的start stop resume等生命周期均会回调给LifeCycleRegistry
+   
+## Navigation
+1. Android Navigation导航组件支持可视化编辑,但是需要Android Studio 3.2 Canary 14 及以上才支持,否则只能通过xml和代码进行实现.

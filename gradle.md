@@ -61,7 +61,7 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
    BootStrapMainStarter:根据gradle home目录,进入lib目录下面查找gradle-launcher-*.jar文件,从查找到的jar问价加载class,查找org.gradle.launcher.GradleMain类,并且执行该类的main方法.
    进入正题(Gradle的执行流程)  
    
-#Gradle执行流程
+##Gradle执行流程
 1. GradleMain:调用*ProcessBootStrap*加载org.gradle.launcher.main类,执行Main类的run方法,Main类也是一个EntryPoint(即执行EntryPoint的run方法)
    run方法执行到Main自己的Main#doAction方法,doAction构造一个自己的CommandLineActionFactory去转换参数,最终execute的为CommandLineActionFactory.WithLogging#execute方法.
    
@@ -103,8 +103,18 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
            ->BuildController向下传递进入SubscribableBuildActionRunner最终进入ChainingBuildActionRunner,交由LauncherService创建时提供的BuildRunnerActions依次执行传递给其buildController.
            
            ->随后进入DefaultGradleLauncher的执行流程 调用DefaultGradleLauncher#executeTasks 进入Build构建流程
+           
+### GradleMain 与 GradleDaemon
+1.GradleMain 是gradle 脚本启动的进程,随后使用ProcessBootStrap启动的Main类
+2.GradleDamon是由 GradleMain启动的进程,随后使用ProcessBootStrap启动的DaemonMain类
+3.GradleMain通过启动后持有的Process 的InputStream将要处理的命令和任务参数传递给 DaemonMain进程,由DaemonMain进程负责处理和启动任务.
+           
+           
    
-2. EntryPoint:有两个子类分别是Main 与DaemonMain
+2. EntryPoint:有两个子类分别是Main(为gradle 命令启动的java进程) 与DaemonMain(Main进程启动后 启动的编译进程)
+3. DefaultScriptCompilationHandler为将Setting.gradle build.gradle 文件编译成为普通java的class文件的类. DefaultScriptCompilationHandler#compileScript为真正执行编译的地方.
+## Plugin的实现
+1. 插件均实现了gradle的Plugin接口.如Java中的JavaPlugin,Android中的AppPlugin,gradle框架层初始化时会调用一次Plugin#apply方法传入一个Project对象,便于插件添加自己的Task任务并建立依赖关系.
 
 ## OtherTips
 1.UserHomeInitScriptFinder 查找gradle安装目录下 init.d 目录中的初始化gradle(即该目录下以 .gradle 与 gradle.kts 结尾的文件).
@@ -114,8 +124,54 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
 2.BuildActionExecutor(I)<----BuildExecutor<BuildActionParameters>(I)
 3.BuildActionRunner(I)
 4.BuildState(I) 
+5.Plugin(I) :各种语言的构建插件,java 语言的构建apply plugin:'java'. (即为JavaPlugin),Groovy语言的构建插件为(GroovyPlugin)
+6. Gradle(I) :一个项目,就只有一个gradle对象,并且只有一个rootProject.
+7. Project(I) :一个build.gradle 通常即为一个Project,一个Gradle项目可以由多个Project组成
+8. Task(I) :一个Project有多个Task,实际上的每一个Project即由这些Task组成的.
+
+
+一个gradle项目 只有一个gradle
+一个gradle可以由多个Project组成
+一个Project可以由多个task组成
+
+Project中调用的方法,不一定是来自Project,可以来自Convention
+
+## Gradle SubProjects子项目整理
+1.cli (Common Language Infrastructure) 通用语言基础框架
+2.core 核心项目初始化构建层
+3.core-api 对外通用提供的构建接口层
+
 ##Groovy Tips 
 1. 同Kotlin一样定义plus的对象则可以使用+算术运算附，对两个对象进行运算。  
+
+##Gradle Tips
+1. 在Project的:
+    dependencies{compile 'commons-lang:commons-lang:2.6'} 
+   等同于:
+   dependencies{ def Dependency = add ('compile','commons-lang:commons-lang:2.6')} 
+   实际调用的为DependencyHandler中的add方法,即DefaultDependencyHandler中的add方法.
+   
+2. apply plugin: 'com.android.application' 是怎么找到插件的?
+   首先会在buildscript 中添加dependencies 添加classpath 'com.android.tools.build:gradle:xxxx'的引用,即引用一个jar,该jar中会有META-INF的资源文件,
+   下面会放置com.android.application.properties文件,内部会使用Implementation-class = com.android.build.gradle.LibraryPlugin 指明该id所对应的类.
+   
+   apply plugin 'java' java插件则全称为 org.gradle.java.位于gradle-plugins-[version].jar包下.其中的META-INF目录下存在与一个org.gradle.java.properties的
+   文件指明了该插件的具体实现类.
+   
+3. 在gradle.properties 中配置系统属性(即通过 System.getProperty()可以获取到的属性),如配置gradle.user.home 在gradle.properties中需要配置为:
+systemProp.gradle.user.home = /home/GradleHome/
+
+## Gradle Debug调试分析源码流程
+1. 修改 GRADLE_HOME/bin/gradle 文件,添加运行时参数:
+ -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 
+ 即
+ eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 -classpath "\"$CLASSPATH\"" org.gradle.launcher.GradleMain "$APP_ARGS"
+ 这样才可以调试GradleMain函数.
+ 
+ 如果只是在运行gradle命令时添加 -Dorg.gradle.debug=true 即 gradle clean -Dorg.gradle.debug=true  --no-daemon 只可以调试DaemonMain函数
+ 
+ 原因是gradle命令运行时添加的参数只对gradle运行之后启动的进程有效,但是GradleMain是命令行运行时启动的参数
+
 
 ##Problem 
 1. (resolved) build.gradle (Project) 和 Task 对象中调用ext是什么语法?
@@ -125,5 +181,15 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
    使用获取到的ExtensionsContainer获取的ext 通常为 DefaultExtraPropertiesExtension
    ext 代表 ExtensionContainer中的key为ext value为DefaultExtraPropertiesExtension的实例.参见ExtraPropertiesExtension#EXTENSION_NAME 变量
    大多数情况下我们可以自己向ExtensionContainer中添加自己的key 与 value值.
+   
+2. (resolved) build.gradle中获取到的Gradle为DefaultGradle_Decorated,Project为DefaultProject_Decorated,Task为DefaultTask_Decorated何时产生的?
+   是AsmBackedClassGenerator创建了AsmBackedClassGenerator.ClassBuilderImpl,内部持有了一个AsmClassGenerator,并且定义了使用Asm生成的类的名称后缀为_Decorated.
+   
+3. DefaultProject DefaultGradle 中部分方法未实现,如:getConfigurationActions方法,直接调用会抛出unSupportOperateException,其方法调用会被正常生成的类代理,何处代理了该方法的调用?
+
+4. 如Gradle Tips 第一条所述,dependencies 闭包中的 compile "group:artifact:version" 和 compile project (':subproject')是如何被识别的?
+
+
+
 
 

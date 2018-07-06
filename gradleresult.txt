@@ -1,0 +1,24 @@
+hello
+From Settings ! This is executed during the initialization phase.
+This is executed during the configuration phase.
+This is also executed during the configuration phase.
+This is executed during the configuration phase as well.
+I am no Action Task!
+StartParameter: StartParameter{taskRequests=[DefaultTaskExecutionRequest{args=[taskB],projectPath='null'}], excludedTaskNames=[], currentDir=/home/hunter/StudioProjects/INotes, searchUpwards=true, projectProperties={}, systemPropertiesArgs={}, gradleUserHomeDir=/home/hunter/.gradle, gradleHome=/home/hunter/AndroidSoft/gradle-4.3, logLevel=LIFECYCLE, showStacktrace=INTERNAL_EXCEPTIONS, buildFile=null, initScripts=[], dryRun=false, rerunTasks=false, recompileScripts=false, offline=false, refreshDependencies=false, parallelProjectExecution=false, configureOnDemand=false, maxWorkerCount=2, buildCacheEnabled=false, interactive=false}
+DDDD
+org.gradle.api.plugins.JavaPlugin@684f1ca0
+taskB name:task ':taskB'
+taskB name(via Project#property): task ':taskB'
+defin ext.taskB !taskB name(via Project#property): I am TaskB ext!
+TaskSize : 1
+GetTaskByName: 1
+Project Type: org.gradle.api.internal.project.DefaultProject_Decorated
+Gradle type: org.gradle.invocation.DefaultGradle_Decorated
+ConfigurationActions: [configuration ':apiElements', configuration ':archives', configuration ':compile', configuration ':compileClasspath', configuration ':compileOnly', configuration ':default', configuration ':implementation', configuration ':runtime', configuration ':runtimeClasspath', configuration ':runtimeElements', configuration ':runtimeOnly', configuration ':testCompile', configuration ':testCompileClasspath', configuration ':testCompileOnly', configuration ':testImplementation', configuration ':testRuntime', configuration ':testRuntimeClasspath', configuration ':testRuntimeOnly']
+Task Type :org.gradle.api.DefaultTask_Decorated
+Closure this : root project 'INotes'
+UpperList: [A, B, C, D, E, F, G]
+Task :root project 'INotes'
+:taskB UP-TO-DATE
+
+BUILD SUCCESSFUL in 0s
