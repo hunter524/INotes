@@ -104,10 +104,34 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
            
            ->随后进入DefaultGradleLauncher的执行流程 调用DefaultGradleLauncher#executeTasks 进入Build构建流程
            
-### GradleMain 与 GradleDaemon
+### GradleMain 与 GradleDaemon 以及相关调用流程分析
 1.GradleMain 是gradle 脚本启动的进程,随后使用ProcessBootStrap启动的Main类
 2.GradleDamon是由 GradleMain启动的进程,随后使用ProcessBootStrap启动的DaemonMain类
 3.GradleMain通过启动后持有的Process 的InputStream将要处理的命令和任务参数传递给 DaemonMain进程,由DaemonMain进程负责处理和启动任务.
+4.ForwardStdinStreamHandler 对于当前进程是向子进程输入,对于子进程则是通过Process#getOutPutStream 获得的流,对于当前进程是output向子进程输入, 对应于子进程则是input流.
+Main进程启动 Daemon进程首先通过Process#getInputStream 和 Process#getOutPutStream 获得和Daemon进程的连接通信,然后Daemon进程启动ServerSocket进行通信前的准备,并将启动的SeverSocket的ip port信息通过Process#getOutputStream
+发送给Main进程告诉链接的相关参数.
+DaemonMain#daemonStarted 方法会在Daemon进程被启动之后,且DaemonMain的Server端的Socket并非是ServerSocket而是SocketChannel(java nio 中的通信方式)
+
+DaemonOutputConsumer即为Client段接收原始Server段通过Process#getInputStream发送过来的信息的工具.
+ExecHandle#start 方法也会将 DaemonOutputConsumer#start被调用.
+### GradleDaemon 接收到 Build Command之后的流程
+1.gradle 命令启动的Client进程,准备参数,将参数封装成为一个Build对象,然后将Build对象序列化之后通过SocketChannel将信息传递给GradleDaemon,GradleDaemon接收到消息后,做编译环境准备,
+将参数反序列化之后,最终启动GradleLauncher(DefaultGradleLauncher)的执行流程.
+2. DefaultGradleLauncher的大致流程分为:加载Init脚本,Setting脚本(Load阶段),(Config阶段),建立Task任务之间的依赖并且执行Task按照依赖关系(TaskGraph任务依赖关系建立)
+
+####Settings文件的加载
+1. 由CompositeBuildSettingsLoader组合DefaultSettingsLoader进行setting.gradle文件的查找和加载.
+找settings.gradle文件后,使用BuildOperationSettingsProcessor委托给RootBuildCacheControllerSettingsProcessor对settings文件进行处理.
+委托流程BuildOperationSettingsProcessor -> RootBuildCacheControllerSettingsProcessor -> SettingsEvaluatedCallbackFiringSettingsProcessor -> PropertiesLoadingSettingsProcessor
+ -> ScriptEvaluatingSettingsProcessor
+ 然后使用AsmBackedClassGenerator 生成DefaultSettings_Decorated对象->ScriptEvaluatingSettingsProcessor#applySettingsScript(负责使用setting.gradle生成groovy类,并生成的DefaultSettings_Decorated对象进行配置)->ScriptPluginImpl#apply方法对生成Setting类执行相关配置方法.
+settings.gradle 文件的处理流程:
+
+5.DaemonService#createDaemonCommandActions 方法提供了DaemonCommandExecuter#executeCommand式所需要的Actions.
+然后DaemonCommandExecution会被循环调用,从而不停地去执行actions.DaemonCommandExecution#proceed 调用DaemonCommandAction#execute 方法,再调用DaemonCommandExecution#proceed从而实现actions的遍历移除被处理.
+实现从Actions的第0项元素向最大项元素进行移除操作.
+然后通过GradleBuildController调用进入GradleLauncher即DefaultGradleLauncher#executeTask等方法.
            
            
    
@@ -122,6 +146,7 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
 ## Gradle中的架构接口整理
 1.BuildAction(I)
 2.BuildActionExecutor(I)<----BuildExecutor<BuildActionParameters>(I)
+BuildActionExecutor 负责最后Build任务的执行以及责任链的向下传递.
 3.BuildActionRunner(I)
 4.BuildState(I) 
 5.Plugin(I) :各种语言的构建插件,java 语言的构建apply plugin:'java'. (即为JavaPlugin),Groovy语言的构建插件为(GroovyPlugin)
