@@ -1,4 +1,9 @@
 #Gradle
+## 主流三大构建工具
+- Ant
+- Maven
+- Gradle
+
 
 ##Somethings
 1. build.gradle 所处的环境是一个Project环境(可以调用Project接口中定义的方法),当前build.gradle 的脚本中如果没有特定方法和属性，则会委托调用到Project
@@ -104,6 +109,23 @@ subprojects(配置注入):在根项目为所有的子项目注入相应的配置
            
            ->随后进入DefaultGradleLauncher的执行流程 调用DefaultGradleLauncher#executeTasks 进入Build构建流程
            
+2. DefaultGradleLaunch的执行流程(Gradle主要的构建与执行流程)
+
+    通常将Gradle的执行流程划分为 Initialization,Configuration,Execution三个阶段.(初始化,配置,执行)
+    
+    DefaultGradleLaunch将执行流程分为三个阶段:
+    
+    Load(主要是执行init.d目录下的初始化脚本,加载settings.gradle文件,构建DefaultSetting对象,建立Project Tree,构建DefaultGradle对象)
+    
+    Configure(根据DefaultSetting对象,构建根Project以及子Project对象,并且编译对应的build.gradle文件对对应的Project对象执行配置操作)
+    
+    TaskGraph(根据命令行参数,筛选需要执行的Task任务,并且构建需要执行的任务的依赖图(有向无环图),DefaultTaskExecutionGraph(任务的执行图是属于Gradle对象的))
+    (任务的循环依赖 图的圈是由 CachingDirectedGraphWalker 该类进行遍历查找)
+    
+    Build(根据构建好的Task执行依赖图,执行相关的任务)
+    
+           
+           
 ### GradleMain 与 GradleDaemon 以及相关调用流程分析
 1.GradleMain 是gradle 脚本启动的进程,随后使用ProcessBootStrap启动的Main类
 2.GradleDamon是由 GradleMain启动的进程,随后使用ProcessBootStrap启动的DaemonMain类
@@ -126,34 +148,89 @@ ExecHandle#start 方法也会将 DaemonOutputConsumer#start被调用.
 委托流程BuildOperationSettingsProcessor -> RootBuildCacheControllerSettingsProcessor -> SettingsEvaluatedCallbackFiringSettingsProcessor -> PropertiesLoadingSettingsProcessor
  -> ScriptEvaluatingSettingsProcessor
  然后使用AsmBackedClassGenerator 生成DefaultSettings_Decorated对象->ScriptEvaluatingSettingsProcessor#applySettingsScript(负责使用setting.gradle生成groovy类,并生成的DefaultSettings_Decorated对象进行配置)->ScriptPluginImpl#apply方法对生成Setting类执行相关配置方法.
-settings.gradle 文件的处理流程:
+ 
+ -> setting.gradle(build.gradle)文件其实视为groovy脚本,会被编译生成class(如:/home/hunter/.gradle/caches/4.8/scripts-remapped/build_389d1eleyd18i3jdncorbr7m6/4o32rmyd074n1dom6idjz2idm/proj099cf95f1e5312fd31ac5a8c95b57f40/classes)
+ 下面的文件即为build.gradle生成的class文件(通过DefaultScriptCompilationHandler#compileScript编译build.gradle文件)
+ 
+ ->进入DefaultScriptPluginFactory对文件进行编译(两次编译脚本)
+ 
+ ->BuildScriptTransformer为将文件build.grade文件转换为Class文件(*override GroovyClassLoader#createCompilationUnit,向CompilationUnit中添加ParseOperation完成对xxx.gradle 即Groovy脚本的解析*)
+   生成的class文件并不会按照GroovyClassLoader生成的类命名方式进行命名,而是通过RemappingScriptSource进行一次重新命名
+   (*build.gradle 会被GroovyClassLoader编译两次,一次是对buildScript块的代码进行编译生成class存放在 cp_proj目录下的class文件中,一次是对其他代码块进行编译(如task等配置任务),存放在proj目录下*)
+   使用的是Groovy的AST机制对相关的代码xxx.gradle脚本进行编译.(TaskDefinitionScriptTransformer)
+   同时会被重新映射到scripts-remapped目录下面
+   
+ ->编译生成_BuildScript_.class会被ScriptRunnerImpl包装一层
+   
 
-5.DaemonService#createDaemonCommandActions 方法提供了DaemonCommandExecuter#executeCommand式所需要的Actions.
+settings.gradle 文件的处理流程:
+通常脚本文件的处理分为 xxx.gradle(build.gradle,setting.gradle) xxx.gradle.kts(kotlin编写的脚本文件),分别使用不同的工厂模式生成处理对象.
+kotlin使用:KotlinScriptPluginFactory生成KotlinScriptPlugin用于配置DefaultSetting_Decorated
+groovy使用:DefaultScriptPluginFactory生成ScriptPluginImpl用于配置DefaultSetting_Decorated.
+
+Gradle对象是在进入DefaultGradleLauncher之前就已经创建好了的.
+加载init.gradle脚本时(init文件中只能获取到gradle对象)
+加载Setting.gradle脚本时其只能获取到Setting对象(ScriptEvaluatingSettingsProcessor#applySettingsScript)
+加载build.gradle脚本是能获取到Project对象(BuildScriptProcessor#execute方法,即DefaultGradleLauncher configure阶段执行Project#evaluate时执行相关的脚本引擎)
+
+
+2.DaemonService#createDaemonCommandActions 方法提供了DaemonCommandExecuter#executeCommand式所需要的Actions.
 然后DaemonCommandExecution会被循环调用,从而不停地去执行actions.DaemonCommandExecution#proceed 调用DaemonCommandAction#execute 方法,再调用DaemonCommandExecution#proceed从而实现actions的遍历移除被处理.
 实现从Actions的第0项元素向最大项元素进行移除操作.
 然后通过GradleBuildController调用进入GradleLauncher即DefaultGradleLauncher#executeTask等方法.
            
            
    
-2. EntryPoint:有两个子类分别是Main(为gradle 命令启动的java进程) 与DaemonMain(Main进程启动后 启动的编译进程)
-3. DefaultScriptCompilationHandler为将Setting.gradle build.gradle 文件编译成为普通java的class文件的类. DefaultScriptCompilationHandler#compileScript为真正执行编译的地方.
+3. EntryPoint:有两个子类分别是Main(为gradle 命令启动的java进程) 与DaemonMain(Main进程启动后 启动的编译进程)
+4. DefaultScriptCompilationHandler为将Setting.gradle build.gradle 文件编译成为普通java的class文件的类. DefaultScriptCompilationHandler#compileScript为真正执行编译的地方.
+5. 脚本文件的处理流程,
+
 ## Plugin的实现
 1. 插件均实现了gradle的Plugin接口.如Java中的JavaPlugin,Android中的AppPlugin,gradle框架层初始化时会调用一次Plugin#apply方法传入一个Project对象,便于插件添加自己的Task任务并建立依赖关系.
 
 ## OtherTips
 1.UserHomeInitScriptFinder 查找gradle安装目录下 init.d 目录中的初始化gradle(即该目录下以 .gradle 与 gradle.kts 结尾的文件).
 
-## Gradle中的架构接口整理
+## Gradle中的接口,类,架构整理汇总
+### 接口及功能实现
 1.BuildAction(I)
+
 2.BuildActionExecutor(I)<----BuildExecutor<BuildActionParameters>(I)
 BuildActionExecutor 负责最后Build任务的执行以及责任链的向下传递.
+
 3.BuildActionRunner(I)
+
 4.BuildState(I) 
+
 5.Plugin(I) :各种语言的构建插件,java 语言的构建apply plugin:'java'. (即为JavaPlugin),Groovy语言的构建插件为(GroovyPlugin)
+
 6. Gradle(I) :一个项目,就只有一个gradle对象,并且只有一个rootProject.
+
 7. Project(I) :一个build.gradle 通常即为一个Project,一个Gradle项目可以由多个Project组成
+
 8. Task(I) :一个Project有多个Task,实际上的每一个Project即由这些Task组成的.
 
+9. TaskContainer(I) :组合进入DefaultProject对象用户管理,创建相关的Task任务.
+
+10. DomainObjectCollection(I):以及继承他们的子接口,实现了Configuration,Task,Artifact等元素的集合与管理
+
+11. DynamicObject(I) :注册接口实现了Convention插件,DefaultScript等接口和方法的动态寻找和调用,避免了调用者直接使用反射操作对添加的插件和方法进行反射调用.
+
+12. TaskActionListener(I) TaskExecutionListener(I) :两个接口均是监听task任务执行的监听器.TaskExecutionListener start 先于 TaskActionListener start被调用.
+
+
+
+9. RepositoryHandler(I) build.gradle 使用 repositories {} 在闭包内部调用的方法即是RepositoryHandler接口的方法,
+   在闭包内部调用一次Jcenter则向DefaultArtifactRepositoryContainer中添加一个库.通常一个Project只有一个RepositoryHandler
+   
+10. ScriptHandler(I) build.gradle 中使用buildscript{}传入可以调用的实例在该闭包中可以调用ScriptHandler中的方法,用于配置编译需要使用的
+类和Plugins插件的路径.
+
+
+BuildExecutionAction :Build阶段执行Task任务的动作接口
+BuildConfigurationAction :Configuration阶段需要执行的任务动作的接口,如根据命令行参数 获取需要执行的Task
+### 类的职责
+1. HelpTasksPlugin (gradle properties dependencies dependencyInsight)等相关Task任务插件在此处添加
 
 一个gradle项目 只有一个gradle
 一个gradle可以由多个Project组成
@@ -186,6 +263,114 @@ Project中调用的方法,不一定是来自Project,可以来自Convention
 3. 在gradle.properties 中配置系统属性(即通过 System.getProperty()可以获取到的属性),如配置gradle.user.home 在gradle.properties中需要配置为:
 systemProp.gradle.user.home = /home/GradleHome/
 
+4. buildscript 中的dependencies与 Project中的dependencies的区别:
+buildscript中配置的dependencies是在DefaultScriptHandler内部ConfigurationContainer中的一个 classpath的Configuration.
+Project中配置的 api 等依赖,是放置在Project的ConfigurationContainer中的,以api为名称的Configuration中的Dependencies中的.
+
+5. Project中的ext Project#ext 属性其实是 Project#extensions#extraProperties 属性
+ 在应用 com.android.application,kotlin-apt 等插件之后会在Project#extensions#extensionsSchema 中添加以:
+ android : com.android.build.gradle.AppExtensions
+ kapt : org.jetbrains.kotlin.gradle.plugin.KaptExtension 
+ 等相关属性.
+ 即在build.gradle 中使用 kapt group:name:version 和 android{}闭包均来自于 Project#extensions
+ 
+ 
+  拓展:
+ 
+  - build.gradle 中使用的android kapt apply等方法的提供方和查找优先级:
+ 
+  属性优先级:
+   Project对象自身的方法 -> project.ext.xxx(即Project#extensions#extraProperties中添加的xxx)
+   -> 添加到Project#extensions中的Extensions -> 向Project#extensions添加的Convention -> Project中添加的task属性
+   -> extra 和 Conventions属性是可以继承的,然后一直向上层Project寻找直到RootProject
+   
+   ext.xxx属性(即extensions中的extraProperty)可以定义的Project,Task,Sub-Project上.因为以上每一层级的对象均有extensions属性,
+   内部均可以放置extraProperty属性.
+   
+   获取相应对象内部定义的ext.xxx属性,只需要在相应的对象内部使用ext.xxx即可获取对应的属性,使用ext.properties 可以获取在Task,Project,
+   SubProject内部定义的所有其他属性.
+   
+  方法优先级:(Dynamic Methods)
+  即build.gradle 可以调用的方法的查找策略:
+  
+  Project对象自己->build.gradle 文件中声明的方法->DefaultConvention#extensions->DefaultConvention#plugins(即Conventions)->进入Task方法的调用(通常只需要传入一个参数)
+  用于配置给定的task的任务->向上递归查找父Project中相关的方法,直到RootProject为止
+  
+  tips:
+  - 如果Property中每个属性的值是一个Closure则该Closure也会被当做方法被调用.
+  
+  - build.gradle 中的属性调用 与 方法调用的优先级 (以及ext Convention extensions中声明的属性以及方法) 是通过BasicScript 及其子类 DefaultScript,
+  ProjectScript,InitScript,SettingScript与build.gradle 通过ScriptDynamicObject耦合在一起的,实现了方法以及属性的优先级策略.
+  
+  - extensions中添加的是以名字或者类型(class)作为标识符的类型实例,通过名字获取的是整个添加的extension实例
+    Convention添加的plugin是单个对象,plugin对象中的方法和属性均可以被单独的调用和获取.
+    
+6. Project#absolutePath返回的路径并非正常认为的 /home/hunter/xxx/xxx/ 路径 而是 :app:sub路径的表示
+
+7. Task任务的执行同其他大部分任务一样,也是嵌套执行的 外部每一层添加自己的任务的执行属性,最终委托给内层的Executor对Task进行真正的执行操作(ExecuteActionsTaskExecuter)
+
+8. Gradle Setting Project Task 等对象的构造顺序:
+
+   - 在DefaultGradleLauncherFactory中先构造Gradle 对象,然后使用gradle对象构造DefaultGradleLauncher对象.
+   
+   - 在DefaultGradleLauncher的LoadSetting阶段 查找settings.gradle 文件所在的位置.然后创建Settings对象,并使用settings.gradle配置该对象
+     *此时的include等添加Project的操作并没有真正的创建Project,只是创建了ProjectDescriptor对象,用于标记subProject的build.gradle,目录地址等属性*
+     *此时通常可以修改ProjectDescriptor一些可读 可写属性 比如name属性, gradle :app:get 任务 修改name属性为rename_app 之后则需要执行 gradle :rename_app:get才可以执行该任务*
+     *Settings#includeFlat是去包含与当前RootProject同级的项目目录*
+     
+     
+   - 在DefaultGradleLauncher的configureBuild阶段 才真正的去根据之前Settings中的ProjectDescriptor去创建RootProject SubProject等Project对象并且配置该对象
+   
+   - 在Project的Configure阶段会去创建当前Project中的Task对象.
+   
+9. dependencies 闭包中 api Implementation debugApi 等均为configuration的名称,其中包含有DependencySet,其中可以可以包含多个Dependency.在SourceSet被配置的阶段会将
+Configuration 加入到对应的SourceSet中.AbstractCompile的Task在配置阶段会去向SourceSet索引 Source,Resource,OutPut等的位置.
+
+10. main test 为JavaPlugin 添加进入JavaPluginConvention的sourceSets(SourceSetContainer)中的一个SourceSet.一个SourceSet中包含多个SourceDirectorySet(e.g java allJava resource allResources)
+
+在SourceSet#output 中classesDir中的分配是 build/classes/$SourceDirectorySet.name/$SourceSet.name/ (i.e 在class编译时 class先按照 SourceDirectorySet的名称进行分类 然后再是SourceSet的名称 
+参见 DefaultGroovySourceSet 该方案会按照语言对编译生成的class文件进行分类)
+
+一个SourceSet(i.e DefaultSourceSet)中只有一个outPut (即SourceSetOutput i.e DefaultSourceSetOutput).SourceSetOutput 即为配置classes 和 resources 编译过程中文件的输出目录
+
+## JavaPlugin机制
+
+apply plugin:"java" 则回去加载plugins项目的org.gradle.java.properties 中配置的JavaPlugin.class.
+->JavaPlugin
+添加JavaBasePlugin
+添加 main 和 test 的SourceSet 同时配置了相关目录
+
+->JavaBasePlugin 
+添加了JavaPluginConvention
+
+配置与编译java,生成classes,resources文件相关的Task.以及test,生成java doc相关的任务 
+
+以下操作的触发时机是当 SourceSet被添加到Project时才会被触发执行,main 和 test 的SourceSet是在JavaPlugin中才会被添加的
+JavaBasePlugin#defineConfigurationsForSourceSet方法,根据SourceSet#getImplementationConfigurationName(Implementation) 等方法获取的名称 生成对应的Configuration添加到Project的Configurations中,便于后续
+编译Task从Project的Configurations中获取编译的任务.
+tips:api 名称的Configuration 是在JavaLibraryPlugin中被创建添加到Project的Configurations中的.
+    *一般的Java项目如果不是Library则 api 与 Implementation 没有区别 (library依赖关系:A->B->C B依赖于C如果是api则A可以使用C中的类和方法 B依赖于C如果是Implementation则A不可以使用C中的类和方法)*
+
+
+->BasePlugin 与 ReportingBasePlugin
+
+
+  -> BasePlugin
+  添加LifeCycleBasePlugin 
+  BasePluginConvention (用于配置 distributions libs目录和名称)
+  配置以build名称开头的Task:获取以build为名称的Configuration,设置该类型Task的Dependency
+  配置以upload名称开头的Task://TODO:具体行为待应用到了再探究
+  配置assemble名称的Task:
+  
+  ->ReportingBasePlugin
+  添加了ReportingExtension 
+  
+->LifeCycleBasePlugin
+添加 clean名称的Task 实际为Delete的Task,删除当前Project的build目录
+给当前Project的task添加一个规则 删除所有以clean 开头命名的Task的OutputPut目录
+同时添加assemble check build 三个Task
+
+
 ## Gradle Debug调试分析源码流程
 1. 修改 GRADLE_HOME/bin/gradle 文件,添加运行时参数:
  -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 
@@ -213,8 +398,49 @@ systemProp.gradle.user.home = /home/GradleHome/
 3. DefaultProject DefaultGradle 中部分方法未实现,如:getConfigurationActions方法,直接调用会抛出unSupportOperateException,其方法调用会被正常生成的类代理,何处代理了该方法的调用?
 
 4. 如Gradle Tips 第一条所述,dependencies 闭包中的 compile "group:artifact:version" 和 compile project (':subproject')是如何被识别的?
+   Project#dependencies传入的闭包,可以调用DependencyHandler,但是生成的BuildScript脚本,初步查看只传入了Project对象并没有传入DependencyHandler对象
+   
+5. (resolved)dependencies操作是如何实现的?
+dependencies传入的闭包引用的是DependencyHandler,DependencyHandler持有Project的ConfigurationContainer,使用 api "xxxx.xxx.xxx:xxx:version"{} 会在ConfigurationContainer中创建一个以api为key的Configuration,然后根据"group:artifact:version"生成Dependency对象加入Configuration中
+
+6. configurations 获取到ConfigurationContainer是什么时候使用,配置Configuration有什么目的?
+
+7. Project中方法优先级中均提及了Extension 和 Convention ,同时Extension的优先级通常高于Convention.
+   Extension通常是存储在ExtensionsStorage中,而Convention是存储在什么地方的?
+   
+   目前查看相关插件的源码发现Convention是添加在DefaultConvention中的plugins中,然后在存储进入ExtensionsDynamicObject中
+   方法的调用是通过BaseScript获取到DynamicObject然后通过DynamicObject对相应的方法进行调用.
+   DefaultConvention#ExtensionsDynamicObject查找属性和方法的策略则是优先在extensionsStorage中进行查找,当查找不到时才会进入plugins中进行查找,即Convention中进行查找.
+   
+8. Project#artifacts 与 ArtifactHandler 是什么关系,如何使用的?
+目前已经发现在Android项目中,如果某个项目为Library Project,其会生成一个 名为default的configuration,其中会存储一个ArchivePublishArtifact_Decorated 实例:
+ArchivePublishArtifact_Decorated projectname:aar:aar 为其他项目提供依赖?
+
+主项目也会生成一个名为default的Configuration,但是其中没有Artifact
+
+子项目定义构建?主项目使用构建? 主项目可以控制与依赖不同的子项目的构建
+
+9. BeanDynamicObject:职责为封装Convention的属性和方法的调用,当插件调用Project#getConvention#getPlugins#put 添加一个Convention时,Convention的添加是为了
+方便Project,Task直接使用Convention中的property和Method.BeanDynamicObject相当于充当方法调用与属性调用的反射工具的功能.
+
+10. 项目最外层的build.gradle(rootProject) buildscript{}语句块中引入的 classpath依赖中的Plugin为什么可以直接在 subProject中直接使用 apply plugin:'xxx.xxx.xxx'进行引用.
+但是在apply from 'sendemail.gradle'的脚本中却无法直接使用(需要在当前脚本中重新定义buildscript{}语句块引入相关联的依赖库)
+
+11. Gradle#useLogger是什么用途? 
+
+12. Settings中的includeBuild有何用途?
 
 
+  
+## 内置的部分Plugin功能间接
+- DistributionPlugin:
+  
+  添加了distributions 方法,用于将指定的源码等目录打包生成 zip 文件.生成的zip或者tar包的名称默认同当前project的名字.
+  可以通过baseName属性配置生成zip or tar包的名称.生成的压缩包位于当前Project下 目录为:<project>/build/distributions(暂且未找到配置该目录路径的方法)
+  配置详情见Distribution接口的定义.
+
+- EAR JAR WAR
+  三种class压缩包打包插件
 
 
 

@@ -2,14 +2,22 @@
 //plugins 语句块需要放在build.gradle的顶部第一行(可以替代apply plugin:'java' 语句
 
 
+buildscript{
+    println "I am Build script!"
+}
+
 //tips:只有buildScript 和 plugins 语句块自己能处于plugins之前
 plugins{
 //    id 'java'
+//    id 'org.gradle.java'
+    id 'base'
     id 'org.gradle.java'
 }
 println 'This is executed during the configuration phase.'
 
-
+//通过该种方式才能引入对其他的 ****.gradle文件对额引用
+//一个项目只能有一个 build.gradle 获取 <ProjectName>.gradle
+apply from: "./deps.gradle"
 
 //定义默认的task直接使用gradle 命令即可以执行
 //gradle 带task参数时执行指定参数的Task 不带task参数时则执行默认的task
@@ -74,6 +82,9 @@ task TaskB(dependsOn:"TaskA"){
 
     println("I am a TaskB Method!")
 }
+
+//不能通过该方式构造Task的依赖,该方式构造的Task依赖会造成一个循环依赖
+TaskA.dependsOn deps
 
 //动态生成task
 4.times {counter->
@@ -250,7 +261,7 @@ println "Dependence Graph: "
 //便可以在Project内部调用Convention的方法了
 class SelfDefinitionConvention{
     public void selfDefinition(){
-        println("call self definition!!!")
+        println("call self definition!@@@@")
     }
 }
 
