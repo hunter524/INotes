@@ -333,6 +333,118 @@ Configuration 加入到对应的SourceSet中.AbstractCompile的Task在配置阶�
 
 一个SourceSet(i.e DefaultSourceSet)中只有一个outPut (即SourceSetOutput i.e DefaultSourceSetOutput).SourceSetOutput 即为配置classes 和 resources 编译过程中文件的输出目录
 
+11. artifacts的使用和流程
+``
+artifiacts{
+    archives someFile
+}
+``
+其实是在使用 ArtifactHandler 向名称为 archives的Configuration的artifacts中添加PublishArtifact.
+名称为archives的Configuration实际上是在BasePlugin插件被应用时所添加的,BasePlugin还添加了名称为default的Configuration
+ArchivePublishArtifact同时还支持使用 AbstractArchiveTask依赖进行构造.
+
+BasePlugin#configureUploadRules 给Task添加配置规则以upload为起始名称的Task会被匹配添加Task,当Task的名称与Project中configurations的名称匹配时则将该Configuration添加到Upload的Task中
+*UploadTask 最终执行会进入DefaultArtifactPublisher#publish 方法中执行上传?*
+
+Project之间的依赖与Artifact也与Configuration有关
+参见:https://github.com/hunter524/AArcDemo/blob/master/mobile/build.gradle 文件中下述两行:
+``
+  debugCompile project(path: ':commRouter', configuration: 'debug')
+  releaseCompile project(path: ':commRouter', configuration: 'release')
+``
+依赖指定Project的指定Configuration,具体在源码中是如何实现的?
+如果不指定Project依赖则之间依赖default Configuration中的Artifact(Android中通常是 一个生成aar 的 ArchivePublishArtifact)
+publishNonDefault true 在android {}中不配置该属性则默认使用default 的Configuration进行Artifact的输出.
+
+如果上传Maven仓库需要依赖maven的插件才可以执行上传任务
+mavenDeployer是在MavenPlugin 添加的DefaultMavenRepositoryHandlerConvention中添加的方法.
+
+Project#artifacts是使用DefaultArtifactHandler向指定的Configuration的artifacts中添加ConfigurablePublishArtifacts
+
+12. Configuration中既可以添加Artifact也可以添加Dependency,artifact和Dependency均区分为两类:一是当前Configuration自己的Artifact和
+Dependency.二是当前Configuration继承的Configuration中的所有的allArtifacts和allDependencies.
+
+Configuration可以有层级关系,设置当前的Configuration继承自其他的Configuration
+*Configuration中通常只配置dependency,artifacts,其中的一种.*(i.e api的Configuration中只配置了Dependency,default的Configuration中只配置了Artifact)
+
+*api 为配置依赖的Configuration,default为当前Project 做为library被其他项目引用的artifact*
+如果是default则可以使用Configuration#getResolvedConfiguration 直接进行Resolve操作,如果是api则不可以使用该方法直接进行Resolve操作
+(i.e DefaultConfiguration中的canBeResolved为false断言没有通过)
+
+Configuration同时也分为三个State阶段(RESOLVED,UNRESOLVED,RESOLVED_WITH_FAILURES)已经成功解析,未解析,解析失败
+
+*依赖配置中常用的exclude操作*
+Configuration中的exclude 可以在单个Configuration中exclude(i.e 从而影响一种类型的configuration的依赖解析操作,如 api名称的configuration)
+exclude也可以在单个ModuleDependency中进行配置,从而影响某种特定的库的依赖搜索(i.e 级联依赖的剔除操作)
+
+从ConfigurationInternal#InternalState的枚举变量值也可以看出Configuration中通常也只配置Artifact或者Dependency中的任意一种,但是也有一些特殊的Configuration中会同时出现配置
+Configuration中的artifacts 与 Dependencies的场景(e.g Android app 项目上 devDebugApiElements即同时出现了 artifacts 与 Configuration)
+InternalState 分为三种状态 UNRESOLVED(未被解析) GRAPH_RESOLVED(依赖已经被解析) ARTIFACTS_RESOLVED(输出产品已经被解析)
+
+*Configuration#resolveToStateOrLater的解析策略 在解析ARTIFACTS之前需要先解析Dependency*
+
+DefaultConfiguration#defaultDependencies使用的是ImmutableActionSet.empty(),第一次add会变成一个单列Set,第二次add会变成一个Composite Set.
+*因此一个Configuration的defaultDependencies 可以有多个 Action 用以配置DependencySet向其中添加Dependency,但是只要一个Action向其中添加成功之后DependencySet不为空时其他Action便不会再被执行*
+*该处的DependencySet只与当前的Configuration有关,不与它继承的Configuration有关*
+
+
+
+Configuration#resolutionStrategy 属性配置了当Configuration中的Dependency依赖出现冲突时的解决策略
+(i.e 通常是依赖的依赖 与 当前 ProjectModule项目的依赖出现版本号等不一致的场景时筛选目前需要的依赖的策略)
+ResolutionStrategy#dependencySubstitution中的DependencySubstitutions 定义了build.gradle中配置的依赖的替换策略.
+(e.g :
+```
+project.configurations.all{
+    resolutionStrategy.dependencySubstitution{
+        substitute module ("com.google.code.gson:gson:2.3.1") with module ("com.google.code.gson:gson:3.0.0")
+    }
+}
+```
+使用gson 2.3.1的库替换 3.0.0的依赖库
+)
+
+DefaultResolutionStrategy#conflictResolution 当依赖发生冲突的时的的解决策略 目前分为三种 strict(冲突即失败的策略) latest(使用最新的版本库) preferProjectModules(当前Project配置的依赖优先,依赖的依赖次之)
+
+
+DefaultResolutionStrategy#componentSelection 可以向DefaultComponentSelectionRules 添加ComponentSelection规则(也就是传入一个闭包,闭包接收的参数为ComponentSelection 从而去选择Module的依赖)
+
+DefaultComponentSelectionRules 中可以通过添加被@Mutate注解的方法的对象添加ComponentSelection规则,被@Mutate注解的方法必须第一个参数接收ComponentSelection返回 void
+
+
+*!!!Configuration中配置好Dependency 同时配置好resolutionStrategy之后是何时去解析获得最终的依赖的结果的?!!!*
+*可能与DefaultConfiguration 中的 ConfigurationResolver有关,使用的是DefaultConfigurationResolver
+同时Configuration中的Dependency的依赖在被解析时也会被识别成一种图的解构,其内部使用DependencyGraphNode数据解构表示,inComing outComing被识别成为一种图的节点的出度 与 入度
+分别代表当前module被哪些module依赖 以及当前module依赖哪些module*
+
+
+13. gradle中Notation解析机制
+
+此处的Notation 指Dependencies中依赖的表示方式(e.g notation :"io.reactivex:rxjava:1.12.0" 需要被解析为 Dependency),Configuration中exclude(e.g notation:标记map 需要被解析 为ExcludeRule)
+Project#file 可以传入多种类型的Object(i.e 传入的Object即为Notation 需要 被解析成为File对象)
+Project#task 创建task任务其实也可以使用Notation进行解析的方式进行,然而其并没有这么做.
+
+实际上是通过NotationParserBuilder 和 NotationConverter 和 NotationParser 三个接口实现了NotationParser 和NotationConverter的组合模式
+NotationConverterToNotationParserAdapter(类型适配器模式) 将NotationConverter转换成为NotationParser
+CompositeNotationConverter 组合多种类型的Converter,形成类似于责任链的解析模式.一旦解析到结果便直接返回结果,而不进行接下来的解析操作.
+
+Dependency的Notation解析依赖于:DependencyNotationParser
+Project#file Notation的解析依赖于:FileOrUriNotationConverter#parser
+Configuration#exclude的Notation的解析依赖于:ExcludeRuleNotationConverter#parser
+
+14. ArtifactResolutionQuery 
+通过ArtifactResolutionQueryFactory进行构造,ArtifactResolutionQueryFactory聚合在DependencyHandler内部,通过Service Locate Pattern创建该Factory实例满足
+ArtifactResolutionQueryFactory的依赖
+*!!!其中 ComponentIdentifier Component Artifact的相关的定义,分别代表的语义是什么?!!!*
+目前查看ComponentIdentifier  ModuleComponentIdentifier 代表的是group:module:version 组件
+目前可以理解为是maven library project依赖的一种元数据的依赖和代表.是依赖表示的一种metadata(元数据:描述数据的数据)
+
+Component 与 Artifact 是一种相互关联的关系,向 DefaultComponentTypeRegistry 以Component作为Key注册Artifact.
+(e.g 以JvmLibrary这个Component作为Key 注册了 JavaDocArtifact 和 SourcesArtifact)
+
+*!!!该处的Artifact与 Configuration中artifacts的区别 即与 PublishArtifact的区别!!!*
+
+15. ExtensionAware
+
 ## JavaPlugin机制
 
 apply plugin:"java" 则回去加载plugins项目的org.gradle.java.properties 中配置的JavaPlugin.class.
@@ -429,6 +541,10 @@ ArchivePublishArtifact_Decorated projectname:aar:aar 为其他项目提供依赖
 11. Gradle#useLogger是什么用途? 
 
 12. Settings中的includeBuild有何用途?
+
+13. Android Library Project的依赖是何种机制实现的?是否可以通过 改变其 artifact的依赖机制,使Library Project 只编译一次生成一个aar包,然后当前项目均可以依赖该aar包,Library Project
+项目不需要重新再进行编译是否会加快编译速度?
+
 
 
   
