@@ -359,7 +359,13 @@ publishNonDefault true 在android {}中不配置该属性则默认使用default 
 如果上传Maven仓库需要依赖maven的插件才可以执行上传任务
 mavenDeployer是在MavenPlugin 添加的DefaultMavenRepositoryHandlerConvention中添加的方法.
 
-Project#artifacts是使用DefaultArtifactHandler向指定的Configuration的artifacts中添加ConfigurablePublishArtifacts
+Project#artifacts是使用DefaultArtifactHandler向指定的Configuration的artifacts中添加 ConfigurablePublishArtifact
+
+*通过 PublishingExtension 取代在Configurations 中添加 Configuration 再向Configuration#artifacts(PublishArtifactSet) 中添加
+PublishArtifact 的操作 然后依赖于Upload 这个Task去上传指定的 Configuration 中的Artifact*
+PublishingExtension 是被添加在Project#extensions 具体参见 PublishPlugin中创建PublishingExtension和设置PublishExtension的方法.
+
+
 
 12. Configuration中既可以添加Artifact也可以添加Dependency,artifact和Dependency均区分为两类:一是当前Configuration自己的Artifact和
 Dependency.二是当前Configuration继承的Configuration中的所有的allArtifacts和allDependencies.
@@ -443,7 +449,17 @@ Component 与 Artifact 是一种相互关联的关系,向 DefaultComponentTypeRe
 
 *!!!该处的Artifact与 Configuration中artifacts的区别 即与 PublishArtifact的区别!!!*
 
-15. ExtensionAware
+15. build.gradle 中 plugins{ id 'xxx.xxx.xxx' } 与 apply plugin:'xxxx.xxx.xxx'
+    plugins 语句块必须放置于 build.gradle 文件的最开始的位置 只有buildscript 和 plugins语句块自己能在 plugins语句块之前.
+    
+    该处也进一步验证了plugins{} 与 buildscript{} 闭包一样在编译的第一阶段即进行了脚本的解释与运行操作
+    其是通过InitialPassStatementTransformer->PluginUseScriptBlockMetadataExtractor->PluginRequestCollector#createSpec创建PluginDependenciesSpec的实例传递调用id方法->
+    id方法调用后将DependencySpecImpl放置进入PluginRequestCollector#specs中
+    
+    tips:gradle 内置的plugin 可以使用 id "java" (非全限定的表示方式) 也可以使用 id "org.gradle.java" (全限定的表示方式)
+    DefaultPluginRegistry#lookup 查找时会拼上 DefaultPluginManager.CORE_PLUGIN_NAMESPACE(org.gradle) 插件名称的限定前缀
+    
+    tips:根据 DefaultPluginResolutionStrategy 一旦Project Loaded则Plugin就会被锁死无法再被进行调用
 
 ## JavaPlugin机制
 
@@ -523,6 +539,14 @@ dependencies传入的闭包引用的是DependencyHandler,DependencyHandler持有
    目前查看相关插件的源码发现Convention是添加在DefaultConvention中的plugins中,然后在存储进入ExtensionsDynamicObject中
    方法的调用是通过BaseScript获取到DynamicObject然后通过DynamicObject对相应的方法进行调用.
    DefaultConvention#ExtensionsDynamicObject查找属性和方法的策略则是优先在extensionsStorage中进行查找,当查找不到时才会进入plugins中进行查找,即Convention中进行查找.
+   
+   *Extension 与 Convention 在Project中使用的区别: 
+   Extension只以自己整体添加时候的Name做为Project的一个属性,Project不能引用到Extension内部的属性和方法
+   Convention的添加则对于Project来说Convention对象内部的属性和方法均为Project对象的内部的属性和方法
+   (e.g) 可以见Project中对属性和方法的获取策略*
+   
+   
+   
    
 8. Project#artifacts 与 ArtifactHandler 是什么关系,如何使用的?
 目前已经发现在Android项目中,如果某个项目为Library Project,其会生成一个 名为default的configuration,其中会存储一个ArchivePublishArtifact_Decorated 实例:
