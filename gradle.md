@@ -333,7 +333,7 @@ Configuration 加入到对应的SourceSet中.AbstractCompile的Task在配置阶�
 
 一个SourceSet(i.e DefaultSourceSet)中只有一个outPut (即SourceSetOutput i.e DefaultSourceSetOutput).SourceSetOutput 即为配置classes 和 resources 编译过程中文件的输出目录
 
-11. artifacts的使用和流程
+11. artifacts的使用和流程 (以及新的PublishPlugin 插件 PublishingExtension 的配置流程)
 ``
 artifiacts{
     archives someFile
@@ -361,11 +361,27 @@ mavenDeployer是在MavenPlugin 添加的DefaultMavenRepositoryHandlerConvention�
 
 Project#artifacts是使用DefaultArtifactHandler向指定的Configuration的artifacts中添加 ConfigurablePublishArtifact
 
+-----------------------PublishPlugin 与 PublishExtension -------------------------------------
 *通过 PublishingExtension 取代在Configurations 中添加 Configuration 再向Configuration#artifacts(PublishArtifactSet) 中添加
 PublishArtifact 的操作 然后依赖于Upload 这个Task去上传指定的 Configuration 中的Artifact*
+
 PublishingExtension 是被添加在Project#extensions 具体参见 PublishPlugin中创建PublishingExtension和设置PublishExtension的方法.
 
+PublishingExtension 只是添加了基础 Publication(发布的产品) repositories(待发布到的仓库的配置功能) 以及添加了 publish 这个名称的task任务
 
+具体publish名称的这个Task任务实际上并没有做什么实质性的任务 而是 MavenPublishPlugin 具体负责向maven仓库的发布任务,同时生成具体发布操作的Task
+然后 publish 这个Task再去依赖(dependsOn这些Task)
+用户只需要输入 gradle publish 即可以完成所有的任务的发布工作
+
+IvyPublishPlugin MavenPublishPlugin 均依赖于PublishPlugin这个基础插件(i.e publish这个Task 和 publishing 这个Extension 用于配置需要发布的任务和执行发布任务的汇总)
+
+PublishingExtension#publication 是用来添加需要发布的Publication(i.e IvyPublication 与 MavenPublication )
+
+Publication 中存储的Artifact为 PublicationArtifact 
+artifact 其 Notation 的解析方式分为 IvyArtifactNotationParserFactory 与 MavenArtifactNotationParserFactory 两个工厂方法
+
+
+Configuration 中存储的 Artifact 为 PublishArtifact
 
 12. Configuration中既可以添加Artifact也可以添加Dependency,artifact和Dependency均区分为两类:一是当前Configuration自己的Artifact和
 Dependency.二是当前Configuration继承的Configuration中的所有的allArtifacts和allDependencies.
@@ -543,7 +559,7 @@ dependencies传入的闭包引用的是DependencyHandler,DependencyHandler持有
    *Extension 与 Convention 在Project中使用的区别: 
    Extension只以自己整体添加时候的Name做为Project的一个属性,Project不能引用到Extension内部的属性和方法
    Convention的添加则对于Project来说Convention对象内部的属性和方法均为Project对象的内部的属性和方法
-   (e.g) 可以见Project中对属性和方法的获取策略*
+   (e.g 可以参见Project中对属性和方法的获取策略) *
    
    
    
