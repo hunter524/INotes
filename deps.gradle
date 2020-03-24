@@ -1,0 +1,7 @@
+println "I am depends gradle Script"
+task deps (){
+    println "configuration deps"
+    doLast{
+        println "execute deps task!"
+    }
+}

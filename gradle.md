@@ -411,6 +411,28 @@ Configuration 中存储的 Artifact 为 PublishArtifact
   该配置规格的实例.Spec内部对其Spec再进行进一步的划分(e.g IvyModuleDescriptorSpec 内部存在着可以配置的 IvyModuleDescriptorAuthor 的实例)
   在脚本当中闭包内层可以调用外层的方式,是通过闭包的委托实现的.
   
+  PublicationArtifact (适用于Publication 中的Artifact输出) 可以由 PublishArtifact (适用于Configuration 中的Artifact输出 ) 解析转换而来. xxx(Ivy,Maven)ArtifactNotationParserFactory
+  *PublishArtifact 向 PublicationArtifact 的转换也只是使用 适配器模式 将 PublishArtifact 包装了一层
+  AbstractArchiveTask -> PublicationArtifact 的转换也只是将Task进行了一层包装*
+  
+  使用 MavenPublication 或者 IvyPublication 的artifact方法时,传递的Object对象如果无法被xxx(Ivy,Maven)ArtifactNotationParserFactory
+  所解析的话则会无法创建 MavenArtifact 或者 IvyArtifact 则会抛出异常.
+  
+  在build.gradle 添加Publication( MavenPublication IvyPublication ) 向其中添加 PublicationArtifact ( IvyArtifact,MavenArtifact)
+  
+  在 MavenPublishPlugin IvyPublishPlugin 中添加了策略(监控Publication的变化) 一旦新添加了Publication 则遍历 PublishingExtension中的repos
+  根据当前Publication 和 Repositories 生成新的发布任务,同时使 publish (PublishingPlugin 添加的基础任务)任务 依赖该 Task.
+  
+  MavenPublication 与 IvyPublication 中from (SoftWareComponent component) 的用法:
+  以MavenPublication为例: 
+  publish 任务的执行依赖于 PublishToMavenRepository 这个Task,该Task中执行发布时先调用对应publication#asNormalisedPublication
+  (先获取到 UsageContext 由对应的 SoftComponent 提供,然后获取到 相应的PublishArtifact 调用 Publication#artifact 包装一下形成 PublicationArtifact 从而添加到 Publication中)
+  
+  ->通过AbstractMavenPublisher 执行publish操作
+  
+  ->再通过 AbstractMavenPublishAction #publish执行具体的发布Artifact的操作
+  
+  
 12. Configuration中既可以添加Artifact也可以添加Dependency,artifact和Dependency均区分为两类:一是当前Configuration自己的Artifact和
 Dependency.二是当前Configuration继承的Configuration中的所有的allArtifacts和allDependencies.
 
@@ -541,6 +563,15 @@ tips:api 名称的Configuration 是在JavaLibraryPlugin中被创建添加到Proj
 添加 clean名称的Task 实际为Delete的Task,删除当前Project的build目录
 给当前Project的task添加一个规则 删除所有以clean 开头命名的Task的OutputPut目录
 同时添加assemble check build 三个Task
+
+#TaskContainer 的作用
+TaskContainer被Project持有用于管理Project内部的Task.
+Project通过TaskContainer间接的持有Task,创建Task,添加TaskProvider(便于在需要时才去真正的构建Task),并且通过DefaultDomainObjectCollection可以实现对指定类型的Task集合执行配置任务.
+TaskContainer内部的很多创建Task的方法并不完全的对build.gradle 脚本暴露.只有Project#task 的几个重载参数的方法可以在build.gradle 中使用.
+TaskContainer中的其他方法可以在Plugin中使用,直接使用Project#getTasks 去使用其中的其他的(高级)创建策略
+
+
+
 
 
 ## Gradle Debug调试分析源码流程
