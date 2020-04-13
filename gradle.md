@@ -67,6 +67,9 @@ apply plugin:'com.android.application' 则为：调用apply 方法传入了一�
   
   展示通过 gradle.properties 设置的所有属性，该属性是针对 build 脚本设置的，也可以使用 gradle 命令: gradle -Pkey=value 设置该脚本属性。与之相对应的
   则存在一个虚拟机属性，需要使用 gradle -Dkey=value
+
+- gradle init
+  初始化 Gradle 项目。
   
 ## build.gradle/setting.gradle 的构建流程
 
@@ -114,7 +117,7 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
   DefaultModuleRegistry
   DefaultClassPathProvider
   DefaultClassPathRegitstry
-  上述四个类在ProcessBootstrap 启动gradle时负责 gradle 安装目录下的 lib 目录下的 jar 模块类的加载，管理和索引。上述管理的模块即为jar包，一个模块可以由多个jar包构成。每个jar 包中通过 module_name-classpath.properties 文件指定当前 jar包模块依赖的 runtime，projects,optional 分别表示该模块运行时所依赖的class,运行时必须依赖的模块，运行时可选的模块。
+  上述四个类在ProcessBootstrap 启动gradle时负责 gradle 安装目录下的 lib 目录下的 jar 模块类的加载，管理和索引。上述管理的模块即为jar包，一个模块可以由多个jar包构成。每个jar 包中通过 <module_name>-classpath.properties 文件指定当前 jar包模块依赖的 runtime，projects,optional 分别表示该模块运行时所依赖的class,运行时必须依赖的模块，运行时可选的模块。
 
 - ClassLoaderFactory
   DefaultClassLoaderFactory
@@ -130,14 +133,19 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
   gradle 命令启动的伪启动类，该类只负责启动模块加载机制，初始化模块加载机制的需要使用的模块化的 VisitableClassLoader ，并且通过该 ClassLoader 启动Gradle 程序的真实入口。
 
 - EntryPoint
+  
+  主要是为了统一执行结束的监听，强制退出虚拟机(JVM 的默认退出机制是需要等待非守护进程全部执行完毕才可以退出，该处直接使用 System.exit 强制退出虚拟机).并且处理全局当中任意一处未被正确处理的异常信息。
+
   - org.gradle.launcher.Main
   - org.gradle.launcher.daemon.bootstrap.DaemonMain
 
 - org.gradle.launcher.Main
   
   - org.gradle.launcher.cli.CommandLineActionFactory
+  
+  被 org.gradle.launcher.Main 使用，将 gradle 的执行行为包装成为 Action （ 实际为 WithLogging 进行执行)
 
-## Gradle 中的服务注册/发现机制(ServiceRegistry)
+### Gradle 中的服务注册/发现机制(ServiceRegistry)
 
 - DefaultServiceRegistry
   
@@ -165,6 +173,8 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
   gradle 的日志服务管理系统。
 
 - WithLogging
+  
+  通过 CommandLineActionFactory 转换被真正执行的 Action 其中传入的 Action 为层级结构，WithLogging (负责日志参数，日志输出，系统执行参数的配置) 持有 ExceptionReportingAction (负责异常的捕获上报) 持有 JavaRuntimeValidationAction (负责判断当前的 JAVA 版本是否可以满足 Gradle 的运行需要) 持有 ParseAndBuildAction (负责 args 执行参数的解析，并且启动指定任务的执行)
 
 - CommandLineConverter/BuildOption
 
@@ -194,9 +204,94 @@ BuildOption 配合 CommandLineConverter 划分配置层次，CommandLineConverte
    属性控制: 无
 
   - ParallelismConfigurationCommandLineConverter
+   用与配置当前构建项目的并行构建参数。该属性属于实验性属性。
+   ParallelOption: --parallel=false/true  bool值表示该项目是否支持并行构建
+   属性控制:org.gradle.parallel
+   MaxWorkersOption:--max-workers=1/2/3/4 数字表示并行构建任务的并行线程池数量
+   属性控制:org.gradle.workers.max
+   上述两个属性均为实验性属性，并未正式发布稳定可以使用的版本
+
   - SystemPropertiesCommandLineConverter
+   -DKey=value 用于读取命令行传递的属性,用于配置系统属性。
+   *该处需要注意通过 gradle 命令传递的运行参数配置高于 通过-DKey=Value 配置的运行参数配置*
+
+  - ParametersConverter
+    执行流程中组合其他 CommandLineConverter 实现 gradle 命令行参数的解析，运行 gradle 的内建任务或者用户指定的运行的其他一个任务或者多个
+    任务。
 
 - CommandLineParser/ParsedCommandLine
+
+   CommandLineParser 用于解析 gradle -v ,gradle -h ,gradle --help,gradle assemblePreRelease , -h ,--help 被称为 option 可选参数。-和-- 规则同命令行
+   规则。option携带参数可以使用 -a arg,--long arg,-a=arg,--long=arg,-aarg 的格式携带参数。可选参数的解析需要在解析之前便需要知道(该处则说明了
+   CommandLineAction，CommandLineConverter 是被用于提前配置解析器的可选参数的作用)
+
+   CommandLineParser#allowOneOf : 选取 options 作为一个分组，分组内部的option指令为互斥的，只能选择一个。
+
+  - CommandLineOption
+  
+    用于描述 -v --help 等长短 option 参数的配置对象，描述该可选参数的作用，是否是实验性，是否已经被声明废弃，参数类型 等相关属性。
+
+- ParserState
+  
+  通过 State Machine Pattern 实现了gradle -Dkey=value assemblePreRelease 命令行参数的解析。使命令行中的每个参数的解析按照一定的状态机机制
+  向下进行解析。
+
+  - OptionAwareParserState
+    - BeforeFirstSubCommand
+    - AfterFirstSubCommand
+  - MissingOptionArgState
+  - AfterOptions
+- OptionParserState
+  - UnknownOptionParserState
+  - KnownOptionParserState
+  
+- CommandLineAction
+  
+  CommandLineAction#configureCommandLineParser 配置 CommandLineParser 告知其支持哪些参数的解析。CommandLineAction#createAction 
+  用于创建需要执行的任务。
+
+  - BuiltInActions
+  - BuildActionsFactory
+
+上述两个 CommandLineAction 均会被 ParseAndBuildAction#execute 解析用于创建需要执行的任务，且 BuiltInActions 创建的任务优先级高于
+BuildActionsFactory 任务的优先级。两者创建的任务如果有多个只有一个会被执行。虽然 gradle -h 会显示多个可选参数，但是内建任务只有 -h 和 -v 
+两个。其他均会被 BuildActionFactory 解析为 gradle 需要执行的普通 task 任务。如果 gradle 命令没有输入 task 任务名称，则设置的默认的 Task 会被
+执行。如果没有设置默认的Task 则内置的 Help 类型的 task 会被执行。
+
+### 基础执行环境
+
+#### 命令行任务的执行
+
+- DefaultExecActionFactory
+- DefaultExecAction
+- DefaultJavaExecAction
+- DefaultExecHandleBuilder
+- JavaExecHandleBuilder
+
+#### 文件路径解析器
+
+- FileResolver
+
+#### 执行环境探测工具
+
+- JAVA 执行环境探测
+  - JvmVersionDetector
+  - DefaultJvmVersionDetector
+  - CachingJvmVersionDetector
+
+### Gradle 的监听器
+
+#### org.gradle.api.invocation.Gradle 中的执行阶段监听器
+
+- org.gradle.BuildListenner
+- org.gradle.api.execution.TaskExecutionGraphListener
+- org.gradle.api.ProjectEvaluationListener
+- org.gradle.api.execution.TaskExecutionListener
+- org.gradle.api.execution.TaskActionListener
+- org.gradle.api.logging.StandardOutputListener
+- org.gradle.api.artifacts.DependencyResolutionListener
+
+### GRADLE 的日志输出系统
   
 ## gradlew 与 gradlew.bat 执行流程
 

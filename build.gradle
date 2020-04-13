@@ -21,7 +21,7 @@ apply from: "./deps.gradle"
 
 //定义默认的task直接使用gradle 命令即可以执行
 //gradle 带task参数时执行指定参数的Task 不带task参数时则执行默认的task
-defaultTasks 'DefaultTask1','DefaultTask2'
+// defaultTasks 'DefaultTask1','DefaultTask2'
 
 task DefaultTask1{
     doFirst{
