@@ -70,6 +70,10 @@ apply plugin:'com.android.application' 则为：调用apply 方法传入了一�
 
 - gradle init
   初始化 Gradle 项目。
+
+- gradle -Dkey=value/gradle -Pkey=value
+  
+  D 设置的是系统配置参数，P 设置的是项目的配置参数。
   
 ## build.gradle/setting.gradle 的构建流程
 
@@ -147,6 +151,8 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 
 ### Gradle 中的服务注册/发现机制(ServiceRegistry)
 
+  在 Gradle 的项目构建源码中很多地方依赖于下面所描述的 createXXX,configureXXXX,decorateXXX 的服务发现机制。可以认为这是gradle项目内置构建的一种依赖注入系统。
+
 - DefaultServiceRegistry
   
   构建 DefaultServiceRegistry 时会调用 DefaultServiceRegistry#findProviderMethods 方法，查找当前 DefaultServiceRegistry的实现类，提供的 createXXX,configureXXX,decorateXXX 用于在 ServiceRegistry 获取相关服务时对相关服务进行构建。
@@ -172,13 +178,13 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
   
   gradle 的日志服务管理系统。
 
-- WithLogging
-  
-  通过 CommandLineActionFactory 转换被真正执行的 Action 其中传入的 Action 为层级结构，WithLogging (负责日志参数，日志输出，系统执行参数的配置) 持有 ExceptionReportingAction (负责异常的捕获上报) 持有 JavaRuntimeValidationAction (负责判断当前的 JAVA 版本是否可以满足 Gradle 的运行需要) 持有 ParseAndBuildAction (负责 args 执行参数的解析，并且启动指定任务的执行)
+### gradle 命令参数解析
 
-- CommandLineConverter/BuildOption
+#### CommandLineConverter/BuildOption
 
-BuildOption 配合 CommandLineConverter 划分配置层次，CommandLineConverter  负责设置 CommandLineParser 支持哪些 Option 参数的解析(CommandLineConverter#configure，如 -h,--help,-v,--verion,-DPro=Value,-i,--info 等 gradle 命令行参数。配置完 CommandLineParser 后通过 CommandLineParser 将命令行传入的 args 解析为 ParsedCommandLine ,再通过 CommandLineConverter#covert 传递 ParsedCommandLine和 Configuration 如 LoggingConfiguration 用于解析命令行参数配置 Configuration。
+ BuildOption 配合 CommandLineConverter 划分配置层次，CommandLineConverter  负责设置 CommandLineParser 支持哪些  Option 参数的解析(CommandLineConverter#configure，如 -h,--help,-v,--verion,-DPro=Value,-i,--info 等 gradle 命令行 参数。配置完 CommandLineParser 后通过 CommandLineParser 将命令行传入的 args 解析为 ParsedCommandLine ,再通过  CommandLineConverter#covert 传递 ParsedCommandLine和 Configuration 如 LoggingConfiguration 用于解析命令行参数配置  Configuration。
+
+ 在 Configuration 的配置过程中 gradle 命令行传递的参数的属性 高于通过属性文件(gradle.propeties,System Properties)设置的属性的优先级。
 
 - CommandLineConverters
   
@@ -216,14 +222,22 @@ BuildOption 配合 CommandLineConverter 划分配置层次，CommandLineConverte
    *该处需要注意通过 gradle 命令传递的运行参数配置高于 通过-DKey=Value 配置的运行参数配置*
 
   - ParametersConverter
-    执行流程中组合其他 CommandLineConverter 实现 gradle 命令行参数的解析，运行 gradle 的内建任务或者用户指定的运行的其他一个任务或者多个
-    任务。
+    执行流程中组合其他 CommandLineConverter 实现 gradle 命令行参数的解析，用于配置 Parameters
+
+#### 其他 Converters
+
+- LayoutToPropetiesCOnverter
+  
+  将当前项目目录下的 gradle.properties,gradle user home 目录下的 gradle.propertiess 文件中的 属性参数解析进入 Map<String,String> 中，同时将JVM运行环境系统配置的 System Properties 也解析进入该Map中。
+
+- 
+
+#### gradle 命令参数解析状态机
 
 - CommandLineParser/ParsedCommandLine
 
    CommandLineParser 用于解析 gradle -v ,gradle -h ,gradle --help,gradle assemblePreRelease , -h ,--help 被称为 option 可选参数。-和-- 规则同命令行
-   规则。option携带参数可以使用 -a arg,--long arg,-a=arg,--long=arg,-aarg 的格式携带参数。可选参数的解析需要在解析之前便需要知道(该处则说明了
-   CommandLineAction，CommandLineConverter 是被用于提前配置解析器的可选参数的作用)
+   规则。option携带参数可以使用 -a arg,--long arg,-a=arg,--long=arg,-aarg 的格式携带参数。可选参数的解析需要在解析之前便需要知道(该处则说明了CommandLineAction，CommandLineConverter 是被用于提前配置解析器的可选参数的作用 )
 
    CommandLineParser#allowOneOf : 选取 options 作为一个分组，分组内部的option指令为互斥的，只能选择一个。
 
@@ -233,30 +247,65 @@ BuildOption 配合 CommandLineConverter 划分配置层次，CommandLineConverte
 
 - ParserState
   
-  通过 State Machine Pattern 实现了gradle -Dkey=value assemblePreRelease 命令行参数的解析。使命令行中的每个参数的解析按照一定的状态机机制
-  向下进行解析。
+  通过 State Machine Pattern 实现了gradle -Dkey=value assemblePreRelease 命令行参数的解析。使命令行中的每个参数的解析按照一定的状态机流程向下进行解析。
+  对于 gradle 命令可选项的参数中不是以-，-- 开头的命令行参数全部添加到 ParsedCommandLine#extraArguments中(如需要运行的task名称)
 
   - OptionAwareParserState
     - BeforeFirstSubCommand
     - AfterFirstSubCommand
   - MissingOptionArgState
   - AfterOptions
+   解析到 -- 或者解析到命令某个参数中不存在 -- ，-  且 allowMixedOptions 表示参数返回该 ParserState 用于解析后续的命令行参数。
+
 - OptionParserState
+
+   负责后续具体的Option选项的 argument 参数的解析与存储。并且在后续参数解析完成之后将其存储进入解析结果 ParsedCommandLine 中传递进入 gradle 后续的执行流程用于任务的执行。
+
+   OptionParserState#onStartNextArg 表示开始下一个 gradle 命令行参数的解析，返回 ParserState 用于表示用于解析下一个命令行参数。
+
+   OptionParserState#onArgument 表示向该命令行可选项添加参数，并且开始下一个命令行参数的解析。
+   OptionParserState#onComplete 表示当前命令行的可选项参数解析结束开始下一个命令行参数的解析。
+
   - UnknownOptionParserState
+  
+   表示未配置在 CommandLineParser 中的已知的选项参数。对于未知的选项参数，该 OptionParserState 不解析获取其任何 argument 可   选参数。解析结束之后返回之前解析命令行参数的 ParserState。
+
   - KnownOptionParserState
   
+    解析已知的选项，并且解析该选项携带的 argument 参数。
+
+#### 开启守护进程
+
+- WithLogging
+  
+  通过 CommandLineActionFactory 转换被真正执行的 Action 其中传入的 Action 为层级结构，WithLogging (负责日志参数，日志输出，系统执行参数的配置) 持有 ExceptionReportingAction (负责异常的捕获上报) 持有 JavaRuntimeValidationAction (负责判断当前的 JAVA 版本是否可以满足 Gradle 的运行需要) 持有 ParseAndBuildAction (负责 args 执行参数的解析，并且启动指定任务的执行)
+
+- ExceptionReportingAction
+  
+  进行执行异常的上报该处的上报动作为输出到控制台，并且回调到外部 EntryPoin 终止当前进程。
+
+- JavaRuntimeValidationAction
+  
+  校验当前 java 环境是否支持该版本的 gradle 执行。
+
+- ParseAndBuildAction
+  
+  再次重新解析 gradle 命令行的参数，并且创建当前 gradle 需要执行 Action 任务。(内建的任务 -h -v, --help ,--version 高于其他 task 任务)
+
 - CommandLineAction
   
-  CommandLineAction#configureCommandLineParser 配置 CommandLineParser 告知其支持哪些参数的解析。CommandLineAction#createAction 
-  用于创建需要执行的任务。
+  CommandLineAction#configureCommandLineParser 配置 CommandLineParser 告知其支持哪些参数的解析。CommandLineAction#createAction用于创建需要执行的任务。
 
   - BuiltInActions
   - BuildActionsFactory
 
-上述两个 CommandLineAction 均会被 ParseAndBuildAction#execute 解析用于创建需要执行的任务，且 BuiltInActions 创建的任务优先级高于
-BuildActionsFactory 任务的优先级。两者创建的任务如果有多个只有一个会被执行。虽然 gradle -h 会显示多个可选参数，但是内建任务只有 -h 和 -v 
-两个。其他均会被 BuildActionFactory 解析为 gradle 需要执行的普通 task 任务。如果 gradle 命令没有输入 task 任务名称，则设置的默认的 Task 会被
-执行。如果没有设置默认的Task 则内置的 Help 类型的 task 会被执行。
+ 上述两个 CommandLineAction 均会被 ParseAndBuildAction#execute 解析用于创建需要执行的任务，且 BuiltInActions 创建的任务优先级高于BuildActionsFactory 任务的优先级。两者创建的任务如果有多个只有一个会被执行。虽然 gradle -h 会显示多个可选参数，但是内建任务只 有 -h 和 -v 两个。其他均会被 BuildActionFactory 解析为 gradle 需要执行的普通 task 任务。如果 gradle 命令没有输入 task 任务名称，则设置 的默认的 Task 会被执行。如果没有设置默认的Task 则内置的 Help 类型的 task 会被执行。
+
+ Parameters 运行参数(内部含有 BuildLayoutParameters,StartParameter,DaemonParameters),被通过 BuildActionsFactory 内置的 ParameterConverter 进行 gradle 命令行参数的解析和 Parameter gradle 运行参数的配置。
+
+- Parameters
+  
+   BuildActionsFactory通过解析 gradle 命令行参数，构建 gradle 构建任务执行需要的参数。其内部持有 BuildLayoutParameters(当前 gradle 任务内部目录的配置信息),StartParameter(当前构建任务运行时的配置信息),DaemonParameters(当前构建任务守护进程的配置信息)
 
 ### 基础执行环境
 
