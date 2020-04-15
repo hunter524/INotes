@@ -77,8 +77,7 @@ apply plugin:'com.android.application' 则为：调用apply 方法传入了一�
   
 ## build.gradle/setting.gradle 的构建流程
 
-gradle 内置编译器，会将gradle dsl 的脚本按照一定的规则编译生成 xxx.Class 存储在 .gradle/cache/x.x.x/script 目录下，执行配置时再分别执行
-对应的生成的 class 文件。  
+gradle 内置编译器，会将gradle dsl 的脚本按照一定的规则编译生成 xxx.Class 存储在 .gradle/cache/x.x.x/script 目录下，执行配置时再分别执行对应的生成的 class 文件。  
 
 - Android 中 assemblePreRelease
 
@@ -153,9 +152,50 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 
   在 Gradle 的项目构建源码中很多地方依赖于下面所描述的 createXXX,configureXXXX,decorateXXX 的服务发现机制。可以认为这是gradle项目内置构建的一种依赖注入系统。
 
-- DefaultServiceRegistry
+- ServiceRegistry/DefaultServiceRegistry
   
-  构建 DefaultServiceRegistry 时会调用 DefaultServiceRegistry#findProviderMethods 方法，查找当前 DefaultServiceRegistry的实现类，提供的 createXXX,configureXXX,decorateXXX 用于在 ServiceRegistry 获取相关服务时对相关服务进行构建。
+  ServiceRegistry:向使用者提供具体的待注入的对象，
+
+  构建 DefaultServiceRegistry 时会调用 DefaultServiceRegistry#findProviderMethods 方法，查找当前 DefaultServiceRegistry的实现类，提供的 createXXX,configureXXX,decorateXXX 用于在 ServiceRegistry 获取相关服务时对相关服务进行构建。该方法会将上述的工厂方法封装成为 FactoryMethodService 添加进入 DefaultServiceRegistry#ownServices,通过DefaultServiceRegistry#thisAsServideProvider 向其他 ServiceRegistry 提供 ServiceProvider 服务，从而形成 ServiceRegistry 的层级结构(也就是实现了一个自己的依赖注入框架)
+
+- ServiceRegistryBuilder
+  
+  提供 DefaultServiceRegistry 的 Builder 模式构造方法。
+
+  - ServiceProvider
+
+    封装提供的工厂对象的工厂方法(如 BasicGlobalScopeServices 中的 createXXX 方法),向使用者提供真正的 Service 工厂方法用于特定类型的对象的创建。
+
+    - CompositeServiceProvider
+  
+       组合其他 ServiceProvider，遍历组合内部的所有 ServiceProvider 进行构造对象的查找
+
+    - ParentServices
+
+       包装向向当前 ServiceRegistry 提供的父 ServiceRegistry ，使其忽略 stop 操作（避免层级依赖，下层关闭了上层的 ServiceRegistry)
+
+    - ConstructorService
+
+      添加某个类，通过该类的构造方法向外提供该对象。提供的对象为单例，因为其继承了 SingletonService。
+
+    - FactoryMethodService
+
+      通过解析对象的 createXXX,decorateXXX 形成该工厂方法，提供的对象为单例，因为其继承了 SingletonService。
+
+    - FixedInstanceService
+
+      不执行任何对象构建操作，只是封装提供的对象，形成 ServiceProvider和Service 向外提供该对象和该对象的工厂。
+    - OwnService
+
+      管理ServiceRegistry 自己提供的 creatXXX 等创建对象的工厂方法。
+
+    - ThisAsService
+
+     将当前 ServiceRegistry 作为工厂和产品向外部提供。
+
+- Service
+
+   通常一个对象实现了上述 ServiceProvider 接口，也会实现该接口，则一个对象即一个对象既向外提供工厂也向外提供产品。
 
 - ServiceMethodFactory
 
@@ -166,13 +206,17 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
   - DefaultServiceMethodFactory
   该类不创建 ServiceMethod 只是委托给 其内部找到的 Delegate ServiceMethodFactory 进行 ServiceMethod 的创建。
 
-  - MethodHandleBasedServiceMethodFactory
-  
-  基于 MethodHandles 封装的 MethodHandlesBasedServiceMethod 方法调用，可能更加底层更加高效，可以使用JIT 虚拟机的方法字节码优化？
+    - MethodHandleBasedServiceMethodFactory
 
-  - ReflectionBasedServiceMethodFactory
-  
-  基于反射 API 的方法调用，只能进行字节码调用而无法使用虚拟机层面的优化操作
+    基于 MethodHandles 封装的 MethodHandlesBasedServiceMethod 方法调用，可能更加底层更加高效，可以使用JIT 虚拟机的方法字节码优化？
+
+    - ReflectionBasedServiceMethodFactory
+
+     基于反射 API 的方法调用，只能进行字节码调用而无法使用虚拟机层面的优化操作
+
+    - ServiceMethod
+
+      是对上述的createXXX,configureXX,decorateXXX 对象提供者方法的一种抽象。为 java.lang.reflect.Method 附加如 name,owner,方法构造返回的对象类型形成该方法。
   
 - LoggingServiceRegistry
   
@@ -384,7 +428,7 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
    执行该方法根据参数构建一个RunBuildAction(实现了Runnable接口的一个对象)返回给CommandLineActionFactory#createAction方法,然后通过Actions#toAction将Runnable包装成一个RunnableActionAdapter(适配器模式),
    外层调用Action#execute方法传入的ExecutionListener其实对于RunBuildAction对象是无法获取到的.
 
-   ->创建RunBuildAction对象时传递的ServiceRegistry参数,通常情况下是DefaultServiceRegistry.
+   ->创建RunBuildAction对象时传递的ServiceRegistry参数,通常情况下是 DefaultServiceRegistry .
    ServiceRegistryBuilder#build->构建DefaultServiceRegistry->调用DefaultServiceRegistry#addProvider->调用DefaultServiceRegistry#findProviderMethods->调用RelevantMethods查找addProvider的以configure,create,decorator开头的方法
 
            ->Service服务被分为三类 create(创建服务,服务当中以create开头的方法),configure(配置服务,服务当中以configure开头的方法),decorator(装饰服务,服务当中以create,或者decorate 开头的方法,且方法参数类型 和 返回类型 相同的方法)
@@ -874,11 +918,8 @@ Project通过TaskContainer间接的持有Task,创建Task,添加TaskProvider(便�
 TaskContainer内部的很多创建Task的方法并不完全的对build.gradle 脚本暴露.只有Project#task 的几个重载参数的方法可以在build.gradle 中使用.
 TaskContainer中的其他方法可以在Plugin中使用,直接使用Project#getTasks 去使用其中的其他的(高级)创建策略
 
-
-
-
-
 ## Gradle Debug调试分析源码流程
+
 1. 修改 GRADLE_HOME/bin/gradle 文件,添加运行时参数:
  -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 
  即
@@ -887,7 +928,7 @@ TaskContainer中的其他方法可以在Plugin中使用,直接使用Project#getT
  
  如果只是在运行gradle命令时添加 -Dorg.gradle.debug=true 即 gradle clean -Dorg.gradle.debug=true  --no-daemon 只可以调试DaemonMain函数
  
- 原因是gradle命令运行时添加的参数只对gradle运行之后启动的进程有效,但是GradleMain是命令行运行时启动的参数
+ 原因是gradle命令运行时添加的参数只对gradle运行之后启动的进程有效,但是GradleMain是命令行运行时启动的参数(gradle 会解析 -D 参数用于启动 gradle 进程)
 
 
 ##Problem 
