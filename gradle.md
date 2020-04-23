@@ -6,6 +6,10 @@
 - Maven
 - Gradle
 
+[主流构建工具的比较]:[https://zhuanlan.zhihu.com/p/24429133]
+[Ant 安装指引]:[https://ant.apache.org/manual/install.html]
+[Maven安装指引]:[https://maven.apache.org/install.html]
+
 ## Somethings
 
 1. build.gradle 所处的环境是一个Project环境(可以调用Project接口中定义的方法),当前build.gradle 的脚本中如果没有特定方法和属性，则会委托调用到Project
@@ -158,6 +162,16 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 
   构建 DefaultServiceRegistry 时会调用 DefaultServiceRegistry#findProviderMethods 方法，查找当前 DefaultServiceRegistry的实现类，提供的 createXXX,configureXXX,decorateXXX 用于在 ServiceRegistry 获取相关服务时对相关服务进行构建。该方法会将上述的工厂方法封装成为 FactoryMethodService 添加进入 DefaultServiceRegistry#ownServices,通过DefaultServiceRegistry#thisAsServideProvider 向其他 ServiceRegistry 提供 ServiceProvider 服务，从而形成 ServiceRegistry 的层级结构(也就是实现了一个自己的依赖注入框架)
 
+  ServiceRegistry一旦被请求过工厂方法或者请求过工厂对象，则该 ServiceRegistry 不再可以被更改。
+
+  当 DefaultServiceRegistry 中的 ServiceProvider 依赖于其他对象构建当前对象时，ServiceProvider 会递归向 DefaultServiceRegistry 查询当前需要使用的对象，并且返回给前面的 ServiceProvider 用于构建当前真正需要的对象。
+
+  DefaultServiceRegistry:提供的对象会遍历父接口，向上回溯父类。当前对象可以满足所有请求依赖类型为该对象的父接口，父类的依赖。
+
+- ServiceRegistration
+
+  通常是提供给工厂类的 configureXXX 方法，向当前 DefaultServiceRegistry 注册工厂，或者产品。使用参考 BasicGlobalScopeServices#configure 。
+
 - ServiceRegistryBuilder
   
   提供 DefaultServiceRegistry 的 Builder 模式构造方法。
@@ -180,11 +194,12 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 
     - FactoryMethodService
 
-      通过解析对象的 createXXX,decorateXXX 形成该工厂方法，提供的对象为单例，因为其继承了 SingletonService。
+      封装工厂对象的工厂方法形成的 ServiceProvider .
 
     - FixedInstanceService
 
       不执行任何对象构建操作，只是封装提供的对象，形成 ServiceProvider和Service 向外提供该对象和该对象的工厂。
+
     - OwnService
 
       管理ServiceRegistry 自己提供的 creatXXX 等创建对象的工厂方法。
@@ -218,9 +233,21 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 
       是对上述的createXXX,configureXX,decorateXXX 对象提供者方法的一种抽象。为 java.lang.reflect.Method 附加如 name,owner,方法构造返回的对象类型形成该方法。
   
+#### 内置的一些常用的 ServiceRegistry和Service
+
 - LoggingServiceRegistry
   
   gradle 的日志服务管理系统。
+
+- MessagingServices
+  
+  gradle 命令行进程与 gradle daemo 进程进行TCP 通信提供一些通信基础设施对象的构建。
+
+- BasicGlobalScopeServices/WorkerSharedGlobalScopeServices/GlobalScopeServices
+
+### Gradle 中的插件服务机制
+
+TODO:// PluginServiceRegistry
 
 ### gradle 命令参数解析
 
@@ -273,8 +300,6 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 - LayoutToPropetiesCOnverter
   
   将当前项目目录下的 gradle.properties,gradle user home 目录下的 gradle.propertiess 文件中的 属性参数解析进入 Map<String,String> 中，同时将JVM运行环境系统配置的 System Properties 也解析进入该Map中。
-
-- 
 
 #### gradle 命令参数解析状态机
 
@@ -361,16 +386,170 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 - DefaultExecHandleBuilder
 - JavaExecHandleBuilder
 
-#### 文件路径解析器
+#### 文件基础设施
+
+##### 公有API
+
+##### 私有API
+
+- PathToFileResolver
+
+  解析 Path 路径(路径对象为 Object 为后续 gradle dsl 中可以提供各种路径预留了实现方式)为 File，同时提供创建基于 baseDir的 PathToFileResolver 为基于基路径的文件解析方式提供了方便。
+
+- RelativeFilePathResolver
+  
+  基于基路径的文件路径解析器。
 
 - FileResolver
+  
+  继承自上述两个接口既提供了基于 baseDir 的路径解析器，也提供了基于普通路径的路径解析器。
 
-#### 执行环境探测工具
+  实现类如下：
+
+  - AbstractFileResolver
+  
+     FileResolver 的基础实现类，提供文件 Notation 向 File 对象转换的操作，通过 FileOrUriNotationConverter 实现了路径标记向路径的转换操作。
+
+  - AbstractBaseDirFileResolver/BaseDirFileResolver
+  
+    继承自 AbstractFileResolver 提供基于 baseDir 的路径解析操作。
+
+  - IdentityFileResolver
+
+    继承自 AbstractFileResolver ，只提供绝对路径解析操作，不提供相对路径解析
+
+- FileLookup/DefaultFileLookup
+  
+   管理 FileResolver,PathToFileResolver 默认实现类 DefaultFileLookup
+
+- PatternFilterable
+
+   模式匹配规则模式过滤规则的基础契约接口
+
+  - PatternSet
+  
+    匹配模式的集合表示。子类有 InternalPatternSet (额外暴露一个 protected 构造方法),ImmutablePatternSet （包装 PatternSet 使其成为不可更改，但是更改被包装的 PatternSet 也是可以的) IntersectionPatternSet (内部持有包装其他 PatternSet 组合形成新的 PatternSet)
+
+- org.gradle.api.specs.Spec
+  
+  描述一种规格，使用者提供产品用于测试是否符合该规格。在文件 PatternSet 向 Spec 转换的过程即为文件的条件向要求描述的转换。也为后续提供闭包 lambda 表达式提供了方便。
+
+- PatternSpecFactory
+  
+  将匹配模式 PatternSet 转换成为 Spec 规格的工厂方法。该工厂只缓存默认的 excludeSpecs (TODO:// 暂时不理解为什么只缓存之前的一个excludeSpec). CachingPatternSpecFactory 该工厂缓存其通过 PatternSet 创建的所有的 Spec 。
+
+- FileTreeElement
+
+文件或者文件抽象树的表示
+
+- FileCollection
+  
+  可以用于表示一组 dependencies ,classpath, src files 。同时可以与 Task 任务相关联用于跟踪这一组任务是由那个 Task 产生的，或者是要交由哪个 Task 进行消费的。AbstractFileCollection 为该接口的主要实现基类。
+  TODO://该处的 FileCollection 为 Task 构建任务和相关文件的重点
+  主要的 FileCollection 分为以下几类
+  
+  - AbstractFileCollection
+  
+    FileCollection的基础实现类，与子类的耦合通过 getFiles 方法获得子类所表示的文件集合。提供了多个文件集合相加，相减，过滤，迭代，向 FileTree 转换等基本操作。
+
+  - CompositeFileCollection
+  - DefaultConfigurableFileCollection
+
+    可以配置的文件集合，为后期向该集合进行配置添加文件提供相应的接口方法。
+
+  - UnionFileCollection
+
+     实现自 CompositeFileCollection ，组合多个 FileCollection
+
+  - FileCollectionAdapter
+
+     文件适配器模式，包装 MinimalFileSet 适配成为 FileCollection
+
+  - EmptyFileCollection
+  
+     表示空的文件集合
+
+  - FixedFileCollection
+
+     表示固定文件集合的文件集合
+
+  - ResolvingFileCollection
+
+     表示通过路径解析出来的文件集合的集合，继承自 CompositeFileCollection。通过 FileCollectionContainer#visitContents 与父类进行耦合。该方法通过 UpackingVisitor 组合 FileCollectionResolveContext(DefaultFileCollectionResolveContext) 和 PathToFileResolver 对提供的路径进行解析,最终通过 FileCollectionResolveContext#resolveAsFileCollections 将文件路径解析成为 FileCollectionInternal 用于获得文件集合。
+
+- FileTree
+
+   该接口实现了 FileCollection 接口，用于描述文件系统的文件树结构。并且提供了一些文件操作方法。(其实并没有什么太大用处),通常用于表示一组等待复制的文件，或者zip,tar 等归档文件或者压缩文件。
+
+- MinimalFileCollection
+
+  最小化的文件集合描述
+
+- FileCollectionFactory
+  
+  通过指定文件，解析指定路径创建空的文件集合，可配置的文件集合。返回的文件集合描述均为 FileCollectionInternal 或者 ConfigurableFileCollection 接口。
+
+- FileLockContentionHandler(DefaultFileLockContentionHandler/NoOpFileLockContentionHandler)
+   TODO:// 该处的协调机制是如何协调的？
+  负责监听本地进程创建的UDP 端口，协调进程间的文件的锁获取。
+
+- FileLockCommunicator
+
+   跨进程间的文件锁的进程间协调的通信机制。文件锁的持有者与文件锁的请求者通过该类进行通信。
+   该类在构造时建立一个本地UDP Socket，ip 为 LocalHost port 由系统分配。该处的ip和port会被写入<file_name>.lock 文件被其他进程进行识别用于和当前进程进行文件间的锁的通信协调。
+
+- FileLockManager(DefaultFileLockManager)
+
+   文件锁管理者(实际上并没有干啥事，只是封装底层的实现暴露给使用者进行使用)
+
+- FileLock(DefaultFileLock)
+  
+  文件锁的描述，同时用于跨进程的文件读写的同步操作。通过 FileChannel#tryLock 机制实现文件的锁的同步和获取。并且在该文件的相同目录下创建 <file_name>.lock 实现文件锁的状态描述(描述锁协调的通信进程端口，锁的文件区域等信息)，同时锁的获取也是获取该lock文件的锁而不是真实的文件的锁（即对真实需要获取锁的文件只能获取整个文件的锁而不能获取部分文件的锁)。底层文件锁的机制还是依赖与java api 系统提供的 FileChannel#tryLock 进行处理。该 DefaultFileLock 只是为了解决跨进程对文件获取锁的协调，退避，通知机制避免进程间由于无法感知文件锁的获取和释放而频繁的竞争文件的锁导致机器资源的消耗。
+
+  DefaultFileLock#lock 方法为该处 <file_name>.lock 文件的锁的获取机制的实现。其底层将文件锁的获取委托给了 LockFileAccess 进行且对文件的锁的获取是分段进行的(分为 state 段和 info 段)
+
+- LockOptions(LockOptionsBuilder)
+  
+   进行文件加锁的可选参数。
+
+- FileLockManager.LockMode
+  
+  文件锁的模式的表述，读读共享锁，读写，写写互斥锁以及没有锁的状态表述。
+
+- LockFileAccess/LockStateAccess
+
+   LockFileAccess 持有 <file_name>.lock 文件的 RandomAccessFile，LockStateAccess，LockInfoAccess 用于对锁标记文件进行当前锁状态信息的更新，以及锁的附加信息(获取当前文件锁的进程的 端口，本地自增的锁id,进程id,操作描述字符串)的更新。
+
+#### NotationConverter
+
+为 gradle dsl 提供的标记解析基础。
+
+- 文件路径标记转换成为 File
+
+#### 进程执行环境工具
 
 - JAVA 执行环境探测
   - JvmVersionDetector
   - DefaultJvmVersionDetector
   - CachingJvmVersionDetector
+
+- ProcessEnvironment (进程环境变量信息描述)
+- ExecFactory
+
+   用于控制进程执行逻辑的进程执行环境。
+
+
+#### 跨进程通信基础设施
+
+#### 线程池基础设施
+
+- ManagedExecutor
+  
+  可以被管理的线程池的标记接口
+
+- ExecutorFactory
+  
+创建可以被统一管理的线程池。实现类为 DefaultExecutorFactory。如:可以一次性关闭所有由该线程池工厂创建的 ManagedExecutor.
 
 ### Gradle 的监听器
 
@@ -383,6 +562,59 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 - org.gradle.api.execution.TaskActionListener
 - org.gradle.api.logging.StandardOutputListener
 - org.gradle.api.artifacts.DependencyResolutionListener
+
+#### org.gradle.internal.event.ListenerManager
+
+  用于管理Gradle 构建流程中的所有事件监听器的注册，以及根据事件监听器的类型对事件监听器进行分组构建广播。广播分为普通广播(对应事件监听器生成的动态代理类) 和 匿名广播(匿名广播可以管理自己的事件监听器，但是不能移除ListennerManager中的监听器)
+
+  匿名广播间接持有普通广播。当向 DefaultListennerManager 中添加新的监听器时，普通广播也会被线程安全的添加新添加的监听器对象。
+
+- ListenerDetails
+
+  包装持有了原始的 Listenner 对象，并且继承了 Dispatch 接口，使用 ReentrantLock 保证对 Listenner 对象下发事件时 Listenner 对象处理事件的线程安全性。其被 DefaultListenerManager 即 DefaultListenerManager 通过 ListenerDetails 间接持有事件的原始对象。
+
+  同时会将 Listenner 接口包装进入 ReflectionDispatch 用于下发事件时通过反射调用方法，下发给直接的 Listenner 处理器对应的方法进行处理。
+  
+- ReflectionDispatch
+
+负责处理 MethodInvocation 消息，通过反射调用将下发的消息传递进入 Listenner 进行处理。
+  
+- AbstractBroadcastDispatch
+
+  - ListenerDispatch
+
+    被 EventBroadcast 持有用于向指定类型 Listenner 下发广播消息。该类是 EventBroadcast 的内部类。配合 EventBroadcast 进行事件的下发，同时保证添加的 Listenner 事件监听器的线程安全性。
+
+  - BroadcastDispatch
+
+    下述三个为 ListennerBroadCast/AnonymousListenerBroadcast 内部使用的用于管理向匿名广播内部添加的 Listenner 和 BroadCast 的机制。
+
+    在向匿名广播内部添加 Listenner 或者 BroadCast 时会存在一个组合 Dispatcher 的升级机制。empty -> singleton -> composite  或者一次性添加多个 Listenner 或者 BroadCast 时直接升级为 composite。
+  
+    - CompositeDispatch
+  
+      组合 SingletonDispatch 被组合的 SingletonDispatch 属于同一类型的事件监听器。
+
+    - SingletonDispatch
+  
+      用于持有 ListenerDispatch
+  
+    - EmptyDispatch
+  
+      表示不持有任何 Dispatch 的一个 Dispatch。
+
+- EventBroadcast
+  
+  表示指定类型 Listenner 的一组监听器，用于向该类型的 Listenner 进行消息的广播。同时保证事件下发的线程安全性。并且配合 ProxyDispatchAdapter 将该广播通过动态代理，将广播发射器包装成 Listenner 动态代理对象的一个实例，使使用者下发广播即像调用该指定类型的 Listenner 中的一个普通方法一样。内部再通过动态代理拦截该监听器的方法调用，构建成为 MethodInvocation （事件消息的封装 再下发给 ListenerDispatch 配合 EventBroadcast 将该类型的消息再下发给真实的 Listenner 进行处理。
+
+- ListenerBroadcast/AnonymousListenerBroadcast
+- ProxyDispatchAdapter/DispatchingInvocationHandler
+  
+  如 EventBroadcast 中对 ProxyDispatchAdapter 的描述
+
+- MethodInvocation
+
+  在 ProxyDispatchAdapter#DispatchingInvocationHandler 封装广播监听器代理对象的方法动态代理调用。用于下发给 Dispatch 进行最终 Listenner 相关方法的调用。
 
 ### GRADLE 的日志输出系统
   
@@ -413,6 +645,27 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 
 ## Gradle执行流程
 
+### GRADLE 构建任务的运行模式
+
+- 前台模式（TODO)
+  
+- Daemon 复用模式（守护进程模式）
+
+   gradle 执行task任务不带任何参数的默认模式，如果有空闲的Daemon进程则复用之前的 Daemon 进程执行构建任务
+
+- 当前进程模式
+
+   gradle 执行task任务带有 -no-demon 参数，且当前执行gradle 命令的进程符合特定条件(当前java环境与执行task要求的java环境相同，执行任务如果要求了JVM 参数，则要求当前参数与要求参数相关，且要求当前 JVM 要求的内存为非低内存环境，即要求当前JVM 环境要求内存大于64MB 或者配置了 -Xmx 参数)，则使用 gradle 命令运行的进程执行构建任务。（从该分支分析 gradle 的执行流程更为简单，可以避免 C 进程（gradle 命令启动进程) 与 S 进程之间的通信(daemon 进程 task 任务真正的执行进程)
+
+- 新建独用 Daemon 模式
+
+   gradle 执行 task 任务带有 -no-daemon 参数，且当前 gradle 命令不符合构建任务要求。则新建一个单独的 Daemon 进程用于构建当前任务。(即使当前有可以复用的进程)
+
+### BuildActionExecuter/BuildExecuter
+
+BuildExecuter :该接口是一个标记接口用于标记真实执行构建任务的对象，只有 SetupLoggingActionExecuter 实现了该接口。
+BuildActionExecuter: SetupLoggingActionExecuter 内部层级委托的每一个对象均实现了该接口，该处的该接口主要用于内部执行环境的校验。
+
 1. GradleMain:调用*ProcessBootStrap*加载org.gradle.launcher.main类,执行Main类的run方法,Main类也是一个EntryPoint(即执行EntryPoint的run方法)
    run方法执行到Main自己的Main#doAction方法,doAction构造一个自己的CommandLineActionFactory去转换参数,最终execute的为CommandLineActionFactory.WithLogging#execute方法.
 
@@ -440,9 +693,9 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 
            ->在BuildActionFactory#runBuildInProcess方法,构建RunBuildAction时第三个参数传递进入的BuildExecutor是通过DefaultRegistry去获取的,实际调用的是
            ToolingGlobalScopeServices#createBuildExecuter 去构造的Executor.ToolingGlobalScopeServices是在GlobalScopeServices#configure的时候被添加进入的.
-           (*实际的操作是读取gradle-launcher-4.1.jar 中/META-INF/services/目录下的配置文件完成反射获取的*参见DefaultServiceLocator#findServiceImplementations)
+           (*实际的操作是读取gradle-launcher-4.1.jar 中/META-INF/services/目录下的配置文件完成反射获取的*参见DefaultServiceLocator#findServiceImplementations,如获取org.gradle.internal.service.scopes.PluginServiceRegistry 文件内部描述的即是org.gradle.tooling.internal.provider.LauncherServices服务,下面的  BuildExecutor 则是由该服务创建的)
            
-           ->LauncherServices中的ToolingGlobalScopeService#createBuildExecutor层层包装,返回给RunBuildAction的BuildExecutor为SetupLoggingActionExecuter,
+           ->LauncherServices中的ToolingGlobalScopeService#createBuildExecutor层层包装,返回给RunBuildAction的BuildExecutor 为SetupLoggingActionExecuter,
            SetupLoggingActionExecuter内部层层包装各种BuildExecutor,
            
            ->中间的Executor做的工作为添加日志,捕捉执行异常打印,校验执行路径是否正确 等工作.InProcessBuildActionExecutor的工作重点为执行GradleLauncher.
@@ -943,7 +1196,7 @@ TaskContainer中的其他方法可以在Plugin中使用,直接使用Project#getT
 2. (resolved) build.gradle中获取到的Gradle为DefaultGradle_Decorated,Project为DefaultProject_Decorated,Task为DefaultTask_Decorated何时产生的?
    是AsmBackedClassGenerator创建了AsmBackedClassGenerator.ClassBuilderImpl,内部持有了一个AsmClassGenerator,并且定义了使用Asm生成的类的名称后缀为_Decorated.
    
-3. DefaultProject DefaultGradle 中部分方法未实现,如:getConfigurationActions方法,直接调用会抛出unSupportOperateException,其方法调用会被正常生成的类代理,何处代理了该方法的调用?
+3. DefaultProject DefaultGradle 中部分方法未实现,如:getConfigurationActions方法,直接调用会抛出unSupportOperateException,其方法��用会被正常生成的类代理,何处代理了该方法的调用?
 
 4. 如Gradle Tips 第一条所述,dependencies 闭包中的 compile "group:artifact:version" 和 compile project (':subproject')是如何被识别的?
    Project#dependencies传入的闭包,可以调用DependencyHandler,但是生成的BuildScript脚本,初步查看只传入了Project对象并没有传入DependencyHandler对象
