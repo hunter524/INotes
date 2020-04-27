@@ -78,6 +78,16 @@ apply plugin:'com.android.application' 则为：调用apply 方法传入了一�
 - gradle -Dkey=value/gradle -Pkey=value
   
   D 设置的是系统配置参数，P 设置的是项目的配置参数。
+
+- gradle assemblePreRelease -m/gradle assemblePreRelease --dry-run
+
+  只展示该 task 依赖需要执行的 task。
+
+## gradle 插件的编写/引用
+
+- 在 build.gradle 中直接定义插件
+- 在项目根目录建立 buildSrc 目录，其中内置 gradle 插件项目
+- 引用第三方插件 jar 包，再引用插件
   
 ## build.gradle/setting.gradle 的构建流程
 
@@ -151,6 +161,157 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
   - org.gradle.launcher.cli.CommandLineActionFactory
   
   被 org.gradle.launcher.Main 使用，将 gradle 的执行行为包装成为 Action （ 实际为 WithLogging 进行执行)
+
+#### 开启守护进程
+
+- WithLogging
+  
+  通过 CommandLineActionFactory 转换被真正执行的 Action 其中传入的 Action 为层级结构，WithLogging (负责日志参数，日志输出，系统执行参数的配置) 持有 ExceptionReportingAction (负责异常的捕获上报) 持有 JavaRuntimeValidationAction (负责判断当前的 JAVA 版本是否可以满足 Gradle 的运行需要) 持有 ParseAndBuildAction (负责 args 执行参数的解析，并且启动指定任务的执行)
+
+- ExceptionReportingAction
+  
+  进行执行异常的上报该处的上报动作为输出到控制台，并且回调到外部 EntryPoin 终止当前进程。
+
+- JavaRuntimeValidationAction
+  
+  校验当前 java 环境是否支持该版本的 gradle 执行。
+
+- ParseAndBuildAction
+  
+  再次重新解析 gradle 命令行的参数，并且创建当前 gradle 需要执行 Action 任务。(内建的任务 -h -v, --help ,--version 高于其他 task 任务)
+
+- CommandLineAction
+  
+  CommandLineAction#configureCommandLineParser 配置 CommandLineParser 告知其支持哪些参数的解析。CommandLineAction#createAction用于创建需要执行的任务。
+
+  - BuiltInActions
+  - BuildActionsFactory
+
+ 上述两个 CommandLineAction 均会被 ParseAndBuildAction#execute 解析用于创建需要执行的任务，且 BuiltInActions 创建的任务优先级高于BuildActionsFactory 任务的优先级。两者创建的任务如果有多个只有一个会被执行。虽然 gradle -h 会显示多个可选参数，但是内建任务只 有 -h 和 -v 两个。其他均会被 BuildActionFactory 解析为 gradle 需要执行的普通 task 任务。如果 gradle 命令没有输入 task 任务名称，则设置 的默认的 Task 会被执行。如果没有设置默认的Task 则内置的 Help 类型的 task 会被执行。
+
+ Parameters 运行参数(内部含有 BuildLayoutParameters,StartParameter,DaemonParameters),被通过 BuildActionsFactory 内置的 ParameterConverter 进行 gradle 命令行参数的解析和 Parameter gradle 运行参数的配置。
+
+- Parameters
+  
+   BuildActionsFactory通过解析 gradle 命令行参数，构建 gradle 构建任务执行需要的参数。其内部持有 BuildLayoutParameters(当前 gradle 任务内部目录的配置信息),StartParameter(当前构建任务运行时的配置信息),DaemonParameters(当前构建任务守护进程的配置信息)
+
+#### BuildActionExecuter/ BuildExecuter (构建任务的发起者与嵌套执行者)
+
+BuildExecuter 是继承自 BuildActionExecuter 的一个标记接口，实现该接口的类只有 SetupLoggingActionExecuter 无论是复用 Daemon进程，不复用 Daemon 进程还是在当前进程执行最终执行逻辑均通过 SetupLoggingActionExecuter 进程进入。
+BuildActionExecuter: 职责划分层级委托功能实现类均实现了该接口，不同的实现类完成不同的执行功能。
+
+- DaemonClient
+
+   在使用 Daemon 进程模式进行构建任务执行时，客户端侧的构建任务描述，主要负责启动 Daemon 进程执行构建任务 与 Daemon 构建进程的通信。
+
+- SetupLoggingActionExecuter
+  
+   构建任务委托链最外层的执行者，负责日志任务的启动和记录。如果是在当前进程执行构建则直接在当前进程直接执行 SetupLoggingActionExecuter#execute 。如果是使用 Daemon 进程构建则使用的是 DaemonClient 在当前进程执行，在 Daemon 进程构建 SetupLoggingActionExecuter 进行执行。
+
+- SessionFailureReportingActionExecuter
+  
+  捕获任何下层链未捕获的异常导致会话关闭的异常。分析摊平该异常并向上层调用链进行传递。
+
+- StartParamsValidatingActionExecuter
+  
+  验证 StarParameter 构建参数提供的构建当前项目的 build.gradle,project dir,setting.gradle ,init Script 文件是否存在。
+
+- ParallelismConfigurationBuildActionExecuter
+
+  解析 StartParameter 通过 ParallelismConfigurationManager 和 DefaultParallelismConfiguration 配置 gradle 并行构建的相关参数。(即当前项目是否支持并行的运行多个 TASK,以及执行并行构建任务的最大的线程数量)
+
+- GradleThreadBuildActionExecuter
+
+TODO:// 设置 GradleThread 标记当前线程是否被管控？有什么用？
+
+- SessionScopeBuildActionExecuter
+
+   通知 SessionLifecycleListener 即将要开始构建和即将要完成构建。
+
+   TOTO:// 通知 SessionLifecycleListener 这两个状态有什么用？
+
+- SubscribableBuildActionExecuter
+
+   客户端启动后 Daemon 进程进入服务端进行执行。该 BuildeActionExecutor 用于向服务端订阅其感兴趣的一些消息推送。
+
+- ContinuousBuildActionExecuter
+
+  gradle 命令一次执行了多个任务且在前面任务执行失败后，继续执行后面的任务的配置。gradle 执行任务添加参数 -t , --continuous
+
+- BuildTreeScopeBuildActionExecuter
+
+- InProcessBuildActionExecuter
+
+   通过 RootBuildState 构建 BuilderController 交由 BuilderActionRunner 构建链执行构建任务。GradleBuildController(BuilderController) 封装了 DefaultGradleLauncher(GradleLauncher)内部的真实执行逻辑。
+
+#### BuildActionRunner(构建任务执行的委托责任链)
+
+包装 BuildAction 和 BuildController 的执行流程，将执行流程的结果反馈给任务的执行者或者是客户端进程。
+BuildController 的实现类为 GradleBuildController， 通过 DefaultRootBuildState#run 对 GradleLauncher 进行包装创建。并且由上面所述的 InProcessBuildActionExecuter 创建交由第一层的 BuildActionRunner 任务委托链的实现者 RunAsBuildOperationBuildActionRunner 进行执行。
+
+LauncherService中BuildActionExecuter使用的BuildActionRunner
+*GradleLauncher 的实现类 DefaultGradleLauncher 为整个 gradle 执行流程的核心，其控制着 gradle 执行流程的各个阶段(LoadSetting,Configure,TaskGraph,RunTasks)*
+
+- RunAsBuildOperationBuildActionRunner
+
+   将上面创建的 BuildController 再封装一层进入 BuildOperationExecutor 进行执行。通过 BuildOperationExecutor#call 调用之后再向 BuildActionRunner 调用链的下游进行执行。
+
+- BuildCompletionNotifyingBuildActionRunner
+
+   包装 BuilderController 的执行逻辑，在执行结束时通知 DefaultBuildScanEndOfBuildNotifier 监听器，便于 Build Scan 插件执行相关工作。
+
+- ValidatingBuildActionRunner
+  
+    验证执行结果是否存在执行结果，如果不存在则抛出 UnsupportedOperationException 认为该 BuildAction 无法被识别和执行。
+
+- BuildOutcomeReportingBuildActionRunner
+
+   为构建过程添加日志上报系统即使用 Gradle#useLogger 为 Gradle 的构建流程添加日志上报插件。并且对 Gradle 的构建结果执行日志打印和上报工作。
+
+- ChainingBuildActionRunner
+
+   调用传入的 BuildActionRunner 列表进行任务的执行，如果某个 BuildActionRunner 有执行结果则直接返回执行结果不再执行后续的BuildActionRunner。该处调用的传入的 BuildActionRunner 最重要的为 ExecuteBuildActionRunner。
+
+- ExecuteBuildActionRunner
+
+    调用 BuildController#run 执行 gradle的构建任务即封装的 GradleLauncher 的任务构建流程。
+
+ToolingBuilderServices 提供 BuildActionRunner 列表:
+
+- BuildModelActionRunner
+- TestExecutionRequestActionRunner
+- ClientProvidedBuildActionRunner
+- ClientProvidedPhasedActionRunner
+
+#### BuildOperationExecutor
+
+TODO:://功能和目的
+
+#### DefaultGradleLauncher/CrossBuildSessionScopeServices
+
+  准备好，最终开始构建任务的执行。分析 DefaultGradleLauncher 是何时如何被创建出来的？DefaultGradleLauncher 内部组合的一些组件是如何被创建出来的以及提供一些什么功能？
+
+- CrossBuildSessionScopeServices
+  
+  跨构建任务会话共享的 Services 通常一个 gradle 构建任务对应一个会话。但是 GradleBuild 任务比较奇特存在使用一个离散的随机的会话的情况。
+
+  在 SessionScopeBuildActionExecuter 构建任务执行时创建，持有上下文的 ServiceRegistry 和 StartParameter 构建参数。
+
+  内部通过 CrossBuildSessionScopeServices#Services 向外提供 GradleLauncherFactory，WorkerLeaseService，BuildOperationExecutor，UserCodeApplicationContext，ListenerBuildOperationDecorator， CollectionCallbackActionDecorator 等对象和工厂的创建。
+
+- DefaultGradleLauncherFactory
+   Gradle(GradleInternal) 对象在该处创建，然后交由 创建的 GradleLauncher(DefaultGradleLauncher)
+- DefaultGradleLauncher
+- WorkerLeaseService
+- BuildOperationListenerManager/BuildOperationListener
+
+  BuildOperationListenerManager 的默认实现类为 DefaultBuildOperationListenerManager 负责 BuildOperationListener 事件监听器的管理以及 BuildOperation  的三种 started , progress ,finished 事件的下发。该处的 Listenner 的添加是通过 Copy On Write 机制从而实现了监听器添加以及事件下发的多线程的安全性。
+  
+  - ProgressShieldingBuildOperationListener
+
+    用于包装使用者添加的 BuildOperationListener,在started 调用之前以及 finished 之后屏蔽 progress 进度回调的调用。
+
+- LoggingBuildOperationProgressBroadcaster
 
 ### Gradle 中的服务注册/发现机制(ServiceRegistry)
 
@@ -248,6 +409,11 @@ gradle 命令用于执行 gradle 安装包 lib 目录下的 gradle-launcher-x.x.
 ### Gradle 中的插件服务机制
 
 TODO:// PluginServiceRegistry
+LauncherServices（gradle 运行的入口)
+
+### Gradle 中的日志打印子系统
+
+- LoggingManagerInternal
 
 ### gradle 命令参数解析
 
@@ -342,39 +508,6 @@ TODO:// PluginServiceRegistry
   - KnownOptionParserState
   
     解析已知的选项，并且解析该选项携带的 argument 参数。
-
-#### 开启守护进程
-
-- WithLogging
-  
-  通过 CommandLineActionFactory 转换被真正执行的 Action 其中传入的 Action 为层级结构，WithLogging (负责日志参数，日志输出，系统执行参数的配置) 持有 ExceptionReportingAction (负责异常的捕获上报) 持有 JavaRuntimeValidationAction (负责判断当前的 JAVA 版本是否可以满足 Gradle 的运行需要) 持有 ParseAndBuildAction (负责 args 执行参数的解析，并且启动指定任务的执行)
-
-- ExceptionReportingAction
-  
-  进行执行异常的上报该处的上报动作为输出到控制台，并且回调到外部 EntryPoin 终止当前进程。
-
-- JavaRuntimeValidationAction
-  
-  校验当前 java 环境是否支持该版本的 gradle 执行。
-
-- ParseAndBuildAction
-  
-  再次重新解析 gradle 命令行的参数，并且创建当前 gradle 需要执行 Action 任务。(内建的任务 -h -v, --help ,--version 高于其他 task 任务)
-
-- CommandLineAction
-  
-  CommandLineAction#configureCommandLineParser 配置 CommandLineParser 告知其支持哪些参数的解析。CommandLineAction#createAction用于创建需要执行的任务。
-
-  - BuiltInActions
-  - BuildActionsFactory
-
- 上述两个 CommandLineAction 均会被 ParseAndBuildAction#execute 解析用于创建需要执行的任务，且 BuiltInActions 创建的任务优先级高于BuildActionsFactory 任务的优先级。两者创建的任务如果有多个只有一个会被执行。虽然 gradle -h 会显示多个可选参数，但是内建任务只 有 -h 和 -v 两个。其他均会被 BuildActionFactory 解析为 gradle 需要执行的普通 task 任务。如果 gradle 命令没有输入 task 任务名称，则设置 的默认的 Task 会被执行。如果没有设置默认的Task 则内置的 Help 类型的 task 会被执行。
-
- Parameters 运行参数(内部含有 BuildLayoutParameters,StartParameter,DaemonParameters),被通过 BuildActionsFactory 内置的 ParameterConverter 进行 gradle 命令行参数的解析和 Parameter gradle 运行参数的配置。
-
-- Parameters
-  
-   BuildActionsFactory通过解析 gradle 命令行参数，构建 gradle 构建任务执行需要的参数。其内部持有 BuildLayoutParameters(当前 gradle 任务内部目录的配置信息),StartParameter(当前构建任务运行时的配置信息),DaemonParameters(当前构建任务守护进程的配置信息)
 
 ### 基础执行环境
 
@@ -673,13 +806,14 @@ BuildActionExecuter: SetupLoggingActionExecuter 内部层级委托的每一个�
 
    ->执行传入的ParseAndBuildAction#execute try catch包装执行传入的ParseAndBuildAction,执行结束后LoggingOutPutInternal输出日志,同时ExceptionReporter输出错误日志记录.
 
-   ->ParseAndBuildAction#execute时:先加入的Action为BuiltInActions负责处理 -help -version 的命令参数. BuiltInActions和BuildActionsFactory均继承自CommandLineAction
+   ->ParseAndBuildAction#execute时:先加入的Action为BuiltInActions负责处理 -help -version 的命令参数. BuiltInActions和BuildActionsFactory均继承自 CommandLineAction , CommandLineAction 用于配置 CommandLineParser 以及根据 gradle 传递进入的命令参数去创建需要执行的 Action （Runnable）
 
    ->根据命令行输入的args选择需要执行的Action,(tips:命令行是-h -v则通过BuiltInActions返回需要执行的Action,否则通过BuildActionsFactory返回需要执行的Action)
 
-   ->执行BuildActionsFactory#createAction方法,通过参数选择需要执行的任务(决定守护进程的使用策略,新建,复用,直接在当前进程执行),最后均调用BuildActionsFactory#runBuildAndCloseServices
+   ->执行BuildActionsFactory#createAction方法,通过参数选择需要执行的任务(决定守护进程的使用策略,新建,复用,直接在当前进程执行),最后均调用BuildActionsFactory#runBuildAndCloseServices 该方法第三个参数需要一个 BuildActionExecuter 根据进程使用的策略不同实现分别为 SetupLoggingActionExecuter (当前进程执行，不需要创建Daemon 进程以及进行进程间的通信) DaemonClient  (创建 Daemon 进程执行构建任务且需要进行进程间的通信)
+
    执行该方法根据参数构建一个RunBuildAction(实现了Runnable接口的一个对象)返回给CommandLineActionFactory#createAction方法,然后通过Actions#toAction将Runnable包装成一个RunnableActionAdapter(适配器模式),
-   外层调用Action#execute方法传入的ExecutionListener其实对于RunBuildAction对象是无法获取到的.
+   外层调用Action#execute方法传入的ExecutionListener其实对于 RunBuildAction 对象是无法获取到的. RunBuildAction 该对象只是封装了 上面所述的 DaemonClient 或者 SetupLoggingActionExecuter 的 execute 方法，并且为其提供一些必要参数，并且封装捕获其异常。
 
    ->创建RunBuildAction对象时传递的ServiceRegistry参数,通常情况下是 DefaultServiceRegistry .
    ServiceRegistryBuilder#build->构建DefaultServiceRegistry->调用DefaultServiceRegistry#addProvider->调用DefaultServiceRegistry#findProviderMethods->调用RelevantMethods查找addProvider的以configure,create,decorator开头的方法
