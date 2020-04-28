@@ -299,10 +299,27 @@ TODO:://功能和目的
 
   内部通过 CrossBuildSessionScopeServices#Services 向外提供 GradleLauncherFactory，WorkerLeaseService，BuildOperationExecutor，UserCodeApplicationContext，ListenerBuildOperationDecorator， CollectionCallbackActionDecorator 等对象和工厂的创建。
 
-- DefaultGradleLauncherFactory
-   Gradle(GradleInternal) 对象在该处创建，然后交由 创建的 GradleLauncher(DefaultGradleLauncher)
-- DefaultGradleLauncher
+- GradleLauncherFactory.DefaultGradleLauncherFactory
+  
+   Gradle(GradleInternal) 对象在该处创建，然后交由创建的 GradleLauncher(DefaultGradleLauncher)
+
+- GradleLauncher/DefaultGradleLauncher
 - WorkerLeaseService
+  
+   取名为 WorkerLease 但是实际上为一种资源(构建工程的资源为 Project，File ,Thread 等)锁机制。用于协调不同资源和任务的执行(特定的任务需要获取到某个或者一组特定的资源锁才可以执行)，避免同时并发执行任务对于资源的影响。
+   与 DefaultPlanExecutor(gradle 中配合并行配置的执行器管理者，使用 org.gradle.internal.concurrent.ExecutorFactory 创建 ManagedExecutor 线程池用于任务的执行) 和 ParallelismConfigurationManager 及 ParallelismConfiguration。
+
+  - StopShieldingWorkerLeaseService
+
+    屏蔽 stop 操作的 WorkerLeaseService ，其他操作委托给内部的委托对象。通过 CrossBuildSessionScopeServices 创建的 WorkerLeaseService 即为 StopShieldingWorkerLeaseService 内部持有了由 CrossBuildSessionScopeServices#Services 创建的真实的 DefaultWorkerLeaseService。
+
+  - DefaultWorkerLeaseService
+
+    用于配合 PlanExecutor (DefaultPlanExecutor),对工作线程池的获取和释放进行管理。
+
+- ResourceLockCoordinationService/DefaultResourceLockCoordinationService
+- ResourceLockRegistry/AbstractResourceLockRegistry/ProjectLockRegistry/WorkerLeaseLockRegistry
+
 - BuildOperationListenerManager/BuildOperationListener
 
   BuildOperationListenerManager 的默认实现类为 DefaultBuildOperationListenerManager 负责 BuildOperationListener 事件监听器的管理以及 BuildOperation  的三种 started , progress ,finished 事件的下发。该处的 Listenner 的添加是通过 Copy On Write 机制从而实现了监听器添加以及事件下发的多线程的安全性。
@@ -311,7 +328,34 @@ TODO:://功能和目的
 
     用于包装使用者添加的 BuildOperationListener,在started 调用之前以及 finished 之后屏蔽 progress 进度回调的调用。
 
+- BuildOperationTrace
+
+  gradle 构建时携带 Dorg.gradle.internal.operations.trace 用于生成 «path-base»-log.txt ,«path-base»-tree.json,,«path-base»-tree.txt 进行构建流程的 debug,开发分析。该处使用了上述 BuildOperationListener 的实现类 LoggingListener 用于向普通监听器中心和BuildOperationListenerManager 监听器中心注册监听构建流程，构建流程信息的记录与写入。
+
+- BuildOperationNotificationBridge
+
+   桥接类将 BuildOperationListener 的事件监听器转换包装成为 BuildOperationNotificationListener。负责 BuildOperationNotificationListener 监听器的注册事件的下发回调。
+  
+  - ReplayAndAttachListener
+  
+     持有 RecordingListener 负责事件的记录，主要对调用 ReplayAndAttachListener#attach 传递的 BuildOperationNotificationListener 负责事件监听器的回放。
+
+  - RecordingListener
+
+     持有 ConcurrentLinkedQueue 负责事件的记录
+
+  - Adapter
+
+    转换类实现 BuildOperationListener 向 BuildOperationNotificationListener 监听器的转换。
+
+  - Started/Progress/Finished
+
+    分别实现了 BuildOperationStartedNotification ，BuildOperationProgressNotification，BuildOperationFinishedNotification 接口。用于向 BuildOperationNotificationListener 监听器下发事件。
+
 - LoggingBuildOperationProgressBroadcaster
+
+  需要广播日志事件的类，通过该广播机制向其他 BuildOperationListener 的所有监听器下发日志广播事件的包装。
+  其内部持有的 DefaultBuildOperationListenerManager 为 DefaultBuildOperationListenerManager 。
 
 ### Gradle 中的服务注册/发现机制(ServiceRegistry)
 
@@ -406,10 +450,17 @@ TODO:://功能和目的
 
 - BasicGlobalScopeServices/WorkerSharedGlobalScopeServices/GlobalScopeServices
 
-### Gradle 中的插件服务机制
+### Gradle 中的插件服务机制(PluginServiceRegistry) 及相关插件
 
-TODO:// PluginServiceRegistry
-LauncherServices（gradle 运行的入口)
+- PluginServiceRegistry
+- AbstractPluginServiceRegistry
+- LauncherServices
+
+   用于构建构建任务的执行流程。
+
+- ExecutionServices
+
+   用于创建多线程任务的任务执行器。
 
 ### Gradle 中的日志打印子系统
 
