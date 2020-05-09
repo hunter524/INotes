@@ -57,6 +57,19 @@ apply plugin:'com.android.application' 则为：调用apply 方法传入了一�
 - gradle wrapper
   任务可以更新 gradle/wrapper 下面的wrapper至当前gradle版本。gradle-wrapper-x.x.x.jar 为存储在当前 GRADLE_HOME/lib 目录下面，
   gradle wrapper 任务只是将其复制进入 gradle/wrapper 目录下。
+
+- gradle init
+
+  初始化创建 gradle 项目。
+
+- gradle help
+
+   查看默认的 gradle 帮助选项。gradle help --task <task_name> 查看指定 task_name 的可选配置参数选项。
+   如 gradle help --task init  则为查看 init 任务可选的配置参数。会列出 --dsl --package -- project-name 等参数用于配置项目的构建。
+
+- gradle projects
+
+   查看当前项目的目录结构。以及其包含的子项目的层级。
   
 - gradle tasks
   
@@ -79,9 +92,13 @@ apply plugin:'com.android.application' 则为：调用apply 方法传入了一�
   
   D 设置的是系统配置参数，P 设置的是项目的配置参数。
 
-- gradle assemblePreRelease -m/gradle assemblePreRelease --dry-run
+- gradle  <task_name> -m/gradle  <task_name> --dry-run
 
-  只展示该 task 依赖需要执行的 task。
+   不执行指定任务，只输出执行该 task 需要被执行的 task 任务列表
+
+- gradle <task_name> --scan
+  
+   用于分析构建任务的耗时，依赖 等。
 
 ## gradle 插件的编写/引用
 
@@ -299,11 +316,81 @@ TODO:://功能和目的
 
   内部通过 CrossBuildSessionScopeServices#Services 向外提供 GradleLauncherFactory，WorkerLeaseService，BuildOperationExecutor，UserCodeApplicationContext，ListenerBuildOperationDecorator， CollectionCallbackActionDecorator 等对象和工厂的创建。
 
-- GradleLauncherFactory.DefaultGradleLauncherFactory
+- BuildState/RootBuildState/NestedBuildState
+
+   用于封装该次的构建的状态和标识符，可以作为构建树的成员。
+   在构建流程 BuildActionExecuter 的 InProcessBuildActionExecuter 中使用 BuildStateRegistry（DefaultIncludedBuildRegistry) 创建该处创建的 RootBuildState (DefaultRootBuildState) 在该 RootBuildState 会通过 GradleLauncherFactory 创建 GradleLauncher 再将其封装进入 GradleBuildController 交由构建链下游的 BuildActionRunner 执行构建任务。
+
+   BuildState 持有 GradleLauncher 并且负责创建 GradleBuildController 交由 BuildActionRunner 执行构建任务。
+
+    BuildState 分类对于实际的构建场景：
+
+      - RootBuildState
   
-   Gradle(GradleInternal) 对象在该处创建，然后交由创建的 GradleLauncher(DefaultGradleLauncher)
+         根构建树的实现类主要有
+
+          -  DefaultRootBuildState
+
+            默认的顶层根构建状态表示。负责使用 GradleLauncherFactory 创建 GradleLauncher ，并在 DefaultRootBuildState#run 中将 GradleLauncher 封装进入 GradleBuildController 交由 InProcessBuildActionExecuter 中的 BuildActionRunner 进行执行。
+
+          -  RootOfNestedBuildTree
+
+            嵌套在构建树内部的顶层根构建状态表示
+
+      - NestedBuildState
+  
+         嵌套在根构建树内部的构建任务。
+
+         - NestedRootBuild
+
+            嵌套在构建树内部的根构建树。
+
+         - IncludedBuildState
+
+           参与构建任务依赖解析，任务执行嵌套在根构建树内部的构建任务。
+           IncludedBuildFactory/DefaultIncludedBuildFactory 使用  Instantiator 创建该实例。
+
+         - StandAloneNestedBuild
+
+            不参与构建任务依赖解析，任务执行嵌套在根构建树内部的构建任务。
+
+- BuildStateRegistry/DefaultIncludedBuildRegistry
+
+    由 CompositeBuildServices 提供该对象的构建。负责创建和管理当前构建过程中的 BuildState 。使构建流程便于管理。
+
+  - ProjectStateRegistry/DefaultProjectStateRegistry
+  - IncludedBuildFactory
+  TODO:// 构建依赖任务的替换机制
+  - IncludedBuildDependencySubstitutionsBuilder
+  - DependencySubstitutions
+  
+  - ImmutableModuleIdentifierFactory/ModuleIdentifier/ModuleVersionIdentifier
+  - CompositeBuildContext/DefaultBuildableCompositeBuildContext/DependencySubstitutionRules
+  - DependencySubstitution
+
+- GradleLauncherFactory/DefaultGradleLauncherFactory
+
+    进行 GradleLauncher 实例 DefaultGradleLauncher 的创建，并且进行周边相关配置的配置。如 DefaultServiceRegistry 的配置， GradleLauncher  内部的  DefaultGradle 对象的创建。
+
+    TODO://GradleLauncher 的创建提供父 GradleLauncher 是一种什么样的使用场景？如果提供了父 GradleLauncher 则使用父 GradleLauncher 的 Gradle 对象作为 新创建的 DefaultGradle 的父 Gradle。
+
+- BuildController/GradleBuildController
+
+    包装 GradleLauncher 的执行流程，使 GradleLauncher 只能被执行一次，更改 Gradle#buildType 属性。通知 GradleLauncher 执行完成。
 
 - GradleLauncher/DefaultGradleLauncher
+
+    被 BuildController 包装，持有 GradleLauncher 。BuildController 会被交由 BuildActionRunner 的实现类 ExecuteBuildActionRunner 进行执行。(调用 BuildController#run 向下调用 GradleLauncher#executeTasks进行构建任务的执行)
+
+    持有下述 SettingsPreparer ，ProjectsPreparer，TaskExecutionPreparer 分别用于 LoadSettings 阶段 Settings 对象创建和配置 ，Configure 阶段 Project 对象的创建和配置，TaskGraph 阶段负责 Task的解析(解析 DefaultTask(未指定 task任务时 gradle 命令需要运行的 Task )，解析 Gradle#StartParameter参数(gradle 任务运行命令指定需要运行的task) ) 。上述三种 Preparer 的具体执行流程参见下面对上面三个类的执行流程和功能分析。
+
+    执行阶段分为:
+    LoadSettings: 通常认为的 Initialization 阶段，SettingsPreparer 位于 org.gradle.initialization 包下。
+    Configure: 通常认为的 Configuration 阶段。ProjectsPreparer 位于 org.gradle.configuration 包下。
+    TaskGraph: Configuration 阶段之后会再次进行一次 Task 执行认为的初始化。 TaskExecutionPreparer 位于 org.gradle.initialization 包下。
+    RunTasks: 通常认为的 Execution 阶段。使用 BuildWorkExecutor#execute 进行 Task 任务的运行。BuildWorkExecutor 位于 org.gradle.execution 包下。
+    Finished:
+
 - WorkerLeaseService
   
    取名为 WorkerLease 但是实际上为一种资源(构建工程的资源为 Project，File ,Thread 等)锁机制。用于协调不同资源和任务的执行(特定的任务需要获取到某个或者一组特定的资源锁才可以执行)，避免同时并发执行任务对于资源的影响。
@@ -317,8 +404,39 @@ TODO:://功能和目的
 
     用于配合 PlanExecutor (DefaultPlanExecutor),对工作线程池的获取和释放进行管理。
 
+    - DefaultWorkerLease
+
+      继承自 AbstractTrackedResourceLock  实现了 ResourceLock 为资源锁的一种表现形式。对于 DefaultWorkerLeaseService 工作线程资源锁服务锁住的是构建时线程池的数量。该处锁的实现均是交由 DefaultWorkerLeaseService#Root （非静态内部类通过控制使用的线程池的数量不超过预配置的并发线程池的最大数量)
+
 - ResourceLockCoordinationService/DefaultResourceLockCoordinationService
+
+   协调锁的获取，控制锁的获取策略。监听外部锁的状态的变化，当外部状态变化后重新触发锁的获取、释放逻辑。
+
+  - ResourceLockState/DefaultResourceLockState
+
+     存储在 ThreadLocal 中用于表示当前线程的锁的状态。内部持有 ResourceLock 分别被 Set 持有当前线程持有的锁和当前线程未持有的锁。
+
+  - AcquireLocks
+  
+    封装 ResourceLock 的获取逻辑，将锁的获取转换成为 Transformer 交由 DefaultResourceLockCoordinationService#withStateLock 进行统一锁的获取与释放策略封装。
+
+  - ReleaseLocks
+
+    同上只不过该处封装的是锁的释放。
+
 - ResourceLockRegistry/AbstractResourceLockRegistry/ProjectLockRegistry/WorkerLeaseLockRegistry
+
+   ResourceLockRegistry 为资源锁注册器。所有获取资源锁的使用者需要向该资源注册器进行注册。目前的资源锁注册器主要有以下两类。别是针对 Project 工作目录资源和工作线程池资源。
+
+- ResourceLock/AbstractTrackedResourceLock/ExclusiveAccessResourceLock(访问独占锁，读写均独占该锁)/ProjectLock/DefaultWorkerLease
+
+  - ProjectLock
+
+     项目独占锁，实现直接使用 ReentrantLock 实现。
+
+  - DefaultWorkerLease
+
+     工作线程的获取锁控制，能否获取锁并不是看锁有没有占用。而是看当前工作线程池的资源是否有可用资源。
 
 - BuildOperationListenerManager/BuildOperationListener
 
@@ -357,7 +475,25 @@ TODO:://功能和目的
   需要广播日志事件的类，通过该广播机制向其他 BuildOperationListener 的所有监听器下发日志广播事件的包装。
   其内部持有的 DefaultBuildOperationListenerManager 为 DefaultBuildOperationListenerManager 。
 
-### Gradle 中的服务注册/发现机制(ServiceRegistry)
+### Gradle 构建流程辅助工具类
+
+#### Gradle 对象的创建
+
+- DefaultGradleLauncherFactory
+
+#### Setting 对象的创建和配置
+
+- SettingsPreparer
+
+#### Project 对象的创建和配置
+
+- ProjectsPreparer
+
+#### Task 对象的创建,配置和执行
+
+- TaskExecutionPreparer
+
+### Gradle 中的服务注册/发现机制(ServiceRegistry)/Instantiator
 
   在 Gradle 的项目构建源码中很多地方依赖于下面所描述的 createXXX,configureXXXX,decorateXXX 的服务发现机制。可以认为这是gradle项目内置构建的一种依赖注入系统。
 
@@ -450,11 +586,20 @@ TODO:://功能和目的
 
 - BasicGlobalScopeServices/WorkerSharedGlobalScopeServices/GlobalScopeServices
 
+#### Instantiator 的对象构建机制
+
+   负责对象的创建和配置。主要分为以下三种对象的创建模式：通过 ServiceRegistry 进行依赖注入模式的对象创建，通过反射调用构建方法进行对象创建。通过搭理第一种对象创建的 ServiceRegistry 监听对象创建的输入，进行对象的创建。
+
+- DependencyInjectingInstantiator
+- DirectInstantiator
+- ImplicitInputsCapturingInstantiator
+
 ### Gradle 中的插件服务机制(PluginServiceRegistry) 及相关插件
 
 - PluginServiceRegistry
 - AbstractPluginServiceRegistry
 - LauncherServices
+- CompositeBuildServices
 
    用于构建构建任务的执行流程。
 
@@ -722,7 +867,6 @@ TODO:://功能和目的
 
    用于控制进程执行逻辑的进程执行环境。
 
-
 #### 跨进程通信基础设施
 
 #### 线程池基础设施
@@ -959,7 +1103,7 @@ Gradle对象是在进入DefaultGradleLauncher之前就已经创建好了的.
 
 2. DaemonService#createDaemonCommandActions 方法提供了DaemonCommandExecuter#executeCommand式所需要的Actions.
 然后DaemonCommandExecution会被循环调用,从而不停地去执行actions.DaemonCommandExecution#proceed 调用DaemonCommandAction#execute 方法,再调用DaemonCommandExecution#proceed从而实现actions的遍历移除被处理.
-实现从Actions的第0项元素向最大项元素进行移除操作.
+实现从Actions的第0项元素向最大项元素进�����移除操作.
 然后通过GradleBuildController调用进入GradleLauncher即DefaultGradleLauncher#executeTask等方法.
 
 3. EntryPoint:有两个子类分别是Main(为gradle 命令启动的java进程) 与DaemonMain(Main进程启动后 启动的编译进程)
@@ -1029,9 +1173,34 @@ Project中调用的方法,不一定是来自Project,可以来自Convention
 2.core 核心项目初始化构建层
 3.core-api 对外通用提供的构建接口层
 
-## Groovy Tips 
+## Gradle 面向用户的机制
 
-1. 同Kotlin一样定义plus的对象则可以使用+算术运算附，对两个对象进行运算。  
+### Plugins
+
+#### 内置的Plugins
+
+- HelpTasksPlugin
+- BuildInitPlugin
+- WrapperPlugin
+- LifecycleBasePlugin
+- BasePlugin
+- ReportingBasePlugin
+- JavaBasePlugin
+- JavaPlugin
+- ScriptingGradleSubplugin
+- KotlinPluginWrapper
+- DistributionPlugin
+- ApplicationPlugin
+- KotlinScriptRootPlugin
+- KotlinScriptBasePlugin
+
+### Convention
+
+### Extensions(ExtensionContainer)
+
+### Convention 与 ExtensionContainer 区别
+
+## Groovy Tips
 
 ## Gradle Tips
 
