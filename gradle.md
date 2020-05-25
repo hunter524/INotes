@@ -89,22 +89,46 @@ apply plugin:'com.android.application' 则为：调用apply 方法传入了一�
   初始化 Gradle 项目。
 
 - gradle -Dkey=value/gradle -Pkey=value
+   D 设置的是系统配置参数，P 设置的是项目的配置参数。
+   -D 对应 gradle.properties 文件的 systemProp 前缀。
+   java -Dkey=value 也可以用于设置 JVM 系统属性。
+
+  -Dorg.gradle.debug=true 该属性可以用于调试 gradle daemon 构建进程,DefaultDaemonStarter 类中有识别该参数。（该进程负责 gradle 项目构建任务的执行，并且可以在特定条件下复用，用于构建任务的执行，其入口函数为 GradleDaemon#main。但是无法调试 gradle 命令启动进程，如果需要调试 gradle 命令启动进程需要在 gradle ，gradlew 脚本执行 gradlexxx.jar 时携带 JVM 调试参数 : -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 。
+
+  属性配置的优先级：命令行->systemProp(gradle.properties,可以放置在 gradle 安装目录，项目根目录，gradle_user_home目录 目录优先级从低到高排序)->gradle prop (配置在 gradle.properties 中以 org.gradle.xxx.xxx=xxxx形式的属性)->env (全大写的属性名称，如 GRADLE_OPTS,GRADLE_USER_HOME,JAVA_HOME)
+
+  systemProp,-D 属性会同时配置在 System#Properties 和 project.extensions.extraProperties.properties 上，前者上去除 前缀，后者携带前缀。
   
-  D 设置的是系统配置参数，P 设置的是项目的配置参数。
+  Projects属性设置:
+  配置服务端机器环境变量: ORG_GRADLE_PROJECT_<prop>=<somevalue> 
+  命令行：添加 -Pkey=value
+  gradle.properties添加属性：org.gradle.project.<key>=<value>
+
+  属性配置对于JVM分类：gradle 的client端参数配置(实际上并没有必要配置该端参数，该端主要用于启动任务和输出日志),gradle 的 Daemon 端参数配置(主要的构建任务执行端)。
+  配置的属性分类：
+  系统的属性：gradle.properties
 
 - gradle  <task_name> -m/gradle  <task_name> --dry-run
 
    不执行指定任务，只输出执行该 task 需要被执行的 task 任务列表
 
-- gradle <task_name> --scan
+- gradle <task_name> --scan/-- profile
   
-   用于分析构建任务的耗时，依赖 等。
+   用于分析构建任务的耗时，依赖 等。--scan 需要借助 gradle 的平台查看更加详细。-- profile 只能查看简单的各个流程和任务的耗时，无法提供更细致的内容。
+
+- --build-cache
+  
+  与gradle clean 无关的属性,即使 项目执行了 gradle clean 项目可以被缓存的 task 缓存的内容依旧可以被使用.其被存储在 gradle_user_home/cache/目录下.
 
 ## gradle 插件的编写/引用
 
 - 在 build.gradle 中直接定义插件
 - 在项目根目录建立 buildSrc 目录，其中内置 gradle 插件项目
 - 引用第三方插件 jar 包，再引用插件
+
+### buildSrc
+
+buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目录.其中可以存放共用的gradle脚本,gradle插件项目(kotlin,java项目).为当前项目内部提供共享的脚本和插件.gradle 根项目及子项目会默认依赖和编译该项目.
   
 ## build.gradle/setting.gradle 的构建流程
 
@@ -704,6 +728,16 @@ TODO:://功能和目的
   - KnownOptionParserState
   
     解析已知的选项，并且解析该选项携带的 argument 参数。
+
+### GRADLE DSL 的实现(相关辅助设施)
+
+#### Project#Extensions(ExtensionContainer)
+
+#### Project#Convention(Convention)
+
+#### Project#Configurations(ConfigurationContainer)
+
+#### Project#Artifacts(ArtifactHandler)
 
 ### 基础执行环境
 
@@ -1600,6 +1634,7 @@ ArchivePublishArtifact_Decorated projectname:aar:aar 为其他项目提供依赖
 
   
 ## 内置的部分Plugin功能间接
+
 - DistributionPlugin:
   
   添加了distributions 方法,用于将指定的源码等目录打包生成 zip 文件.生成的zip或者tar包的名称默认同当前project的名字.
@@ -1609,5 +1644,15 @@ ArchivePublishArtifact_Decorated projectname:aar:aar 为其他项目提供依赖
 - EAR JAR WAR
   三种class压缩包打包插件
 
+## JAVA 命令总结
 
+- javac
+  -g 保留所有调试参数
+- javap
+- jps
+   展示 java 进程号，启动该java 进程的 main 类 传入的参数等信息。
 
+### Bak
+
+ubuntu安装 tightvncserver 服务端 客户端安装 vncviewr
+centos 安装 tigervnc-server
