@@ -12,123 +12,39 @@
 
 ## Somethings
 
-1. build.gradle 所处的环境是一个Project环境(可以调用Project接口中定义的方法),当前build.gradle 的脚本中如果没有特定方法和属性，则会委托调用到Project
-   对象上的方法和属性。
-   但是在其Closure中用this获取的实例为ProjectScript子类的实例，build.gradle其实是处于ProjectScript脚本中。本身groovy文件的执行便是处于一个脚本对象中进行执行的。
+-. build.gradle 所处的环境是一个Project环境(可以调用Project接口中定义的方法),当前build.gradle 的脚本中如果没有特定方法和属性，则会委托调用到Project对象上的方法和属性。但是在其Closure中用this获取的实例为ProjectScript子类的实例，build.gradle其实是处于ProjectScript脚本中。本身groovy文件的执行便是处于一个脚本对象中进行执行的。
 
-2. gradle安装目录存在一个init.d目录,内部可以放置InitScript（xxxx.gradle)文件，每次调用均会执行该处的代码。
+-. gradle安装目录存在一个init.d目录,内部可以放置InitScript（xxxx.gradle)文件，每次调用均会执行该处的代码。
 
-3. init.d 目录下的xxx.gradle gradle初始化的时候进行执行，settings.gradle会在initialization阶段进行执行
-build.gradle中的脚本会在configuration阶段进行执行，部分脚本在execution阶段进行执行。
+-. init.d 目录下的xxx.gradle gradle初始化的时候进行执行，settings.gradle会在initialization阶段进行执行
+build.gradle中的脚本会在configuration阶段进行执行，脚本内配置的任务,相关配置闭包在execution阶段进行执行。
 
-4. gradle的执行过程分为三个阶段：initialization->configuration->execution
+-. gradle的执行过程分为三个阶段：initialization->configuration->execution
 initialization：初始化阶段执行settings.gradle,加入需要构建的Project，为Project创建Project对象
 configuration：配置阶段执行build.gradle文件，建立项目的依赖关系，以及Task的依赖关系。
 execution：执行阶段按照顺序执行task任务完成项目的构建
 三个阶段根据core部分的源码分包也可以看出:./gradle/subprojects/core/ 项目目录下即分为三个主要的包分别为initialization，configuration，和execution
 
-5. Settings的相关命令：
+-. Settings的相关命令：
 include 'project1', 'project2:child', 'project3:child1' 根据DefaultSettings的源码，可以得知 project2和其下child两个Project均会被加入
 当前项目的构建项目中。
 includeFlat 则要求该目录是root的兄弟目录，不能是root的子目录，include则包含的目录是root的子目录。
 project命令则是根据名称去寻找到Project，然后修改Project的dir和buildFile的文件名字。
 默认的buildFile的名称是由 DefaultScriptFileResolver 类生成的为 build+(.)+支持的脚步文件的后缀名。支持的后缀名称配置在 ScriptingLanguages 文中(目前值 .gradle和.gradle.kts)
 
-6. task相互之间的依赖关系可以使用dependsOn进行配置，且task的命令是属于Project中的命令。
+-. task相互之间的依赖关系可以使用dependsOn进行配置，且task的命令是属于Project中的命令。
 参见同级目录中的build.gradle的定义，task中的{}其实是执行一个方法传入了一个Closure（闭包）。闭包方法会被立刻执行(也就说明了为什么闭包中的方法会在configuration时被调用)，doLast doFirst会在运行的时候执行。
 
-7. gradle中的依赖管理，allprojects，repositories，dependencies在build.gradle 中均为project的方法，传入的参数均为Closure闭包({})。
+-. gradle中的依赖管理，allprojects，repositories，dependencies在build.gradle 中均为project的方法，传入的参数均为Closure闭包({})。
 repositories(Project):对应gradle的RepositoryHandler源码。
 dependencies(Project)：对应gradle的DependencyHandler。
 subprojects(Project 配置注入):在根项目为所有的子项目注入相应的配置
 
-8.apply from ：可以从当前的gradle中加载另外一个文件的gradle,该新加载的gradle文件是用来配置同一个Project，即ObjectConfigurationAction#target。
+-.apply from ：可以从当前的gradle中加载另外一个文件的gradle,该新加载的gradle文件是用来配置同一个Project，即ObjectConfigurationAction#target。
   ObjectConfigurationAction的实现类为DefaultObjectConfigurationAction，其会编译提供的脚本路径生成多个Class文件，将其应用到Target上。
 apply plugin:'com.android.application' 则为：调用apply 方法传入了一个map。用于应用于当前项目的插件。
   
-9.Project#buildScript 通常在Project 根目录下用于配置 当前脚本的执行环境所依赖的jar和第三方库等。
-
-## gradle 常用命令
-
-- gradle
-  
-  不带有任何命令行参数，其会触发初始化，配置阶段，然后执行配置的 Project#defaultTasks 配置的默认task.
-  
-- gradle wrapper
-  任务可以更新 gradle/wrapper 下面的wrapper至当前gradle版本。gradle-wrapper-x.x.x.jar 为存储在当前 GRADLE_HOME/lib 目录下面，
-  gradle wrapper 任务只是将其复制进入 gradle/wrapper 目录下。
-
-- gradle init
-
-  初始化创建 gradle 项目。
-
-- gradle help
-
-   查看默认的 gradle 帮助选项。gradle help --task <task_name> 查看指定 task_name 的可选配置参数选项。
-   如 gradle help --task init  则为查看 init 任务可选的配置参数。会列出 --dsl --package -- project-name 等参数用于配置项目的构建。
-
-- gradle projects
-
-   查看当前项目的目录结构。以及其包含的子项目的层级。
-  
-- gradle tasks
-  
-  展示当前项目配置的可以用于执行的任务。
-  
-- gradle dependencies
-  
-  用于展示当前项目的maven依赖结构，其是按照项目展示依赖的结构的，在根目录下执行则展示的是根目录的依赖结构，在app目录下执行即展示的是app目录的maven依赖。
-  在Android 项目中其通常用于分析依赖关系和解决依赖冲突。
-  
-- gradle properties
-  
-  展示通过 gradle.properties 设置的所有属性，该属性是针对 build 脚本设置的，也可以使用 gradle 命令: gradle -Pkey=value 设置该脚本属性。与之相对应的
-  则存在一个虚拟机属性，需要使用 gradle -Dkey=value
-
-- gradle init
-  初始化 Gradle 项目。
-
-- gradle -Dkey=value/gradle -Pkey=value
-   D 设置的是系统配置参数，P 设置的是项目的配置参数。
-   -D 对应 gradle.properties 文件的 systemProp 前缀。
-   java -Dkey=value 也可以用于设置 JVM 系统属性。
-
-  -Dorg.gradle.debug=true 该属性可以用于调试 gradle daemon 构建进程,DefaultDaemonStarter 类中有识别该参数。（该进程负责 gradle 项目构建任务的执行，并且可以在特定条件下复用，用于构建任务的执行，其入口函数为 GradleDaemon#main。但是无法调试 gradle 命令启动进程，如果需要调试 gradle 命令启动进程需要在 gradle ，gradlew 脚本执行 gradlexxx.jar 时携带 JVM 调试参数 : -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 。
-
-  属性配置的优先级：命令行->systemProp(gradle.properties,可以放置在 gradle 安装目录，项目根目录，gradle_user_home目录 目录优先级从低到高排序)->gradle prop (配置在 gradle.properties 中以 org.gradle.xxx.xxx=xxxx形式的属性)->env (全大写的属性名称，如 GRADLE_OPTS,GRADLE_USER_HOME,JAVA_HOME)
-
-  systemProp,-D 属性会同时配置在 System#Properties 和 project.extensions.extraProperties.properties 上，前者上去除 前缀，后者携带前缀。
-  
-  Projects属性设置:
-  配置服务端机器环境变量: ORG_GRADLE_PROJECT_<prop>=<somevalue> 
-  命令行：添加 -Pkey=value
-  gradle.properties添加属性：org.gradle.project.<key>=<value>
-
-  属性配置对于JVM分类：gradle 的client端参数配置(实际上并没有必要配置该端参数，该端主要用于启动任务和输出日志),gradle 的 Daemon 端参数配置(主要的构建任务执行端)。
-  配置的属性分类：
-  系统的属性：gradle.properties
-
-- gradle  <task_name> -m/gradle  <task_name> --dry-run
-
-   不执行指定任务，只输出执行该 task 需要被执行的 task 任务列表
-
-- gradle <task_name> --scan/-- profile
-  
-   用于分析构建任务的耗时，依赖 等。--scan 需要借助 gradle 的平台查看更加详细。-- profile 只能查看简单的各个流程和任务的耗时，无法提供更细致的内容。
-
-- --build-cache
-  
-  与gradle clean 无关的属性,即使 项目执行了 gradle clean 项目可以被缓存的 task 缓存的内容依旧可以被使用.其被存储在 gradle_user_home/cache/目录下.
-
-## gradle 插件的编写/引用
-
-- 在 build.gradle 中直接定义插件
-- 在项目根目录建立 buildSrc 目录，其中内置 gradle 插件项目
-- 引用第三方插件 jar 包，再引用插件
-
-### buildSrc
-
-buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目录.其中可以存放共用的gradle脚本,gradle插件项目(kotlin,java项目).为当前项目内部提供共享的脚本和插件.gradle 根项目及子项目会默认依赖和编译该项目.
+-.Project#buildScript 通常在Project 根目录下用于配置 当前脚本的执行环境所依赖的jar和第三方库等。
   
 ## build.gradle/setting.gradle 的构建流程
 
@@ -138,6 +54,87 @@ gradle 内置编译器，会将gradle dsl 的脚本按照一定的规则编译�
 
 依赖于 TaskManager#createAssembleTask 依赖于 BasedVariantOutPutData 通过 buildType buildFlavor 去分别构建不同 Variant的 assembleXXXXXX
 任务。
+
+## Public Api 相关源码
+
+### Task
+
+Task的执行状态: Executed(no label),UP-TO_DATE,FROM-CACHE,SKIPPED,NO-SOURCE
+
+- AbstractTask/DefaultTask/ConventionTask
+  
+  build.gradle 构建脚本内部使用 task#create 未指定 Task 类型时创建的 Task 则为 DefaultTask 的默认实现的 Task.指定 Task 类型时如指定Delete,Copy 类型的 Task 则创建的是该指定类型的Task.指定类型的Task如 Delete,Copy 实现了 ConventionTask(即 DefaultTask 的子类).
+
+- TaskInputs
+  
+  用于标记和存储 Task 的输入,进行 up-to-date 的检测.Task 之间的 input output 依赖可以被 gradle 利用来推断，task 执行之间的依赖关系
+
+- TaskOutputs
+  
+  用于表示 task 的输出,用于标记该 task 是否可以被 cache,是否已经处于 up-to-date 状态.
+
+- TaskInputFilePropertyBuilder/TaskOutputFilePropertyBuilder/TaskFilePropertyBuilder
+
+  使用 runtime Api 配置，task input output 时，为 input，output 的文件提供额外的属性。等同于在Input Output 注解上额外使用 Optional,PathSensitive,SkipWhenEmpty等附加注解用于修饰 input output 的标记状态。
+
+- StopExecutionException
+  
+  Task 执行 Action 时跳过后续 Action的执行,继续执行后面的Task.
+
+- StopActionException
+
+  跳过当前Action的执行,当前方法内部直接使用 return 语句即可完成该功能.方法调用层级内部则需要依赖抛出该异常终止 Action 的执行.
+  *此处则是使用异常控制程序的执行逻辑*
+
+#### (Up-to-date)Task 注解标记Input/Output
+
+  主要用于用户自己新创建的 Task 进行 Up-to-Date 检测时的输入输出标记.
+
+- @Input
+  
+  标记的gettet 如果是文件,只关注是否存在,不关注内容.同样可以标注基础数据,或者是实现了 Serializable 接口的数据.
+
+- @InputDirectory/@InputFile/@InputFiles
+
+  既关注文件,文件夹是否存在,也关注内容.
+
+- @OutputDirectory/@OutputFile/@OutputFiles
+
+  Task 输出 UP-TO-DATE 检测,既关注文件,文件夹是否存在,也关注内容.
+
+- @Nested
+
+  支持 Provider,Iterable,Map,普通 Bean 等层级嵌套数据的检查.要求被 @Nested 标记的对象内部字段需要被上述 input/output 等文件标记注解所标记.
+
+- @Classpath/@CompileClasspath
+  
+  标记当前 Task 依赖的 jar class 文件.如果 jar class ABIs(Abstract Binary Interfaces,公有方法签名,类的继承关系,字段类型) 不变则不会导致 out-of-date.只改变方法的实现,或者改变私有方法的签名及实现,依旧会被认为可以 up-to-date.
+
+- @Destroys
+  
+  标记被当前 Task 移除的文件. 不能与 input/output 标记同时使用.
+
+- @LocalState
+
+  标记 Task 的输出,在下次进行 up-to-date 检查时从输入移除
+
+- 其他注解
+  @Console : 只影响控制台输入输出的属性
+  @Internal: 内部使用属性,不是输入也不是输出
+  @ReplacedBy: 标记该属性已经被其他属性替换,不应该被当作输入/输出
+  @SkipWhenEmpty:与文件 input 类属性同用,当所有文件都为空时跳过该 task 执行.
+  @Incremental: 与 input 类注解同用,告知gradle跟踪这些文件的变化,使使用者可以通过 InputChanges 查询这些文件的变化.
+  @Optional: 标记属性可选,用于标记Input的文件.
+  @PathSensitive: 标记该输入输出文件的路径敏感程度,即即使内容没改变,路径被改变了也认为是改变.(绝对路径,相对路径,文件名称,忽略路径和名称)
+
+#### (Up-to-date)Task 运行时 API 检测
+
+  主要用于用户使用的第三方的 Task 无法进行代码更改时,使用运行时 API 进行输入输出的配置,用于 up-to-date 的检测.
+
+- Task#getInputs
+- Task#getOutputs
+- Task#getDestroyables
+- Task#getDestroyables
 
 ## GradleMain/GradleWrapperMain
 
@@ -156,7 +153,7 @@ gradle 内置编译器，会将gradle dsl 的脚本按照一定的规则编译�
   下载的zip存储的基目录与子目录。
   其中基目录通常指向 GRADLE_USER_HOME ,默认的GRADLE_USER_HOME 为 /userdir/.gradle/, base 的可选配置参见 PathAssembler,有PROJECT，GRADLE_USER_HOME.默认的 GRADLE_USER_HOME 参见目录 BuildLayoutParameters#DEFAULT_GRADLE_USER_HOME.
 
-  distributionUrl: 
+  distributionUrl:
   指定的wrapper 版本的 gradle-x.x.x-all.zip的下载路径
   
   distributionSha256Sum:
