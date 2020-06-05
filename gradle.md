@@ -136,6 +136,38 @@ Task的执行状态: Executed(no label),UP-TO_DATE,FROM-CACHE,SKIPPED,NO-SOURCE
 - Task#getDestroyables
 - Task#getDestroyables
 
+### 构建脚本(build.gradle,setting.gradle)
+
+构建脚本主要包含下述三种类型：初始化脚本，设置脚本，构建脚本。初始化脚本通常是共用的，用于跨模块，跨项目之间用于配置 gradle 构建工具的公用属性。设置脚本用于配置当前构建项目需要由哪些子项目组成或者相关项目组成。构建脚本则用于配置具体的项目的gradle构建相关的任务的属性和自定义属性。
+
+初始化脚本中的this:groovy 为 InitScript 子类，kotlin 为 KotlinInitScript 子类。
+设置脚本中的this:groovy 为 SettingsScript 子类，kotlin 为 KotlinSettingsScript 子类。
+构建脚本中的this:groovy 为 ProjectScript 子类，kotlin 为 KotlinBuildScript 子类。
+
+使用 groovy 语言作为构建脚本的则使用 groovy.lang.Script 内建支持的脚本机制实现了对象的调用方法的委托和DSL的实现。
+使用 kotlin 语言则依赖于 GradleDelegate,SettingsDelegate,ProjectDelegate 的扩展方法实现了方法的委托和DSL。
+其中的target 方法被委托类分别为：Gradle,Settings,Project
+
+无论使用kolin 语言还是使用 groovy 语言，脚本相关的代码均会被编译成脚本类再进行运行。
+
+配置脚本分为两类：一类如 Project#exec 方法，获取配置之后立刻执行。一类如 Task 配置 doLast 获取配置，稍后运行特定task时才会运行该任务。
+
+脚本中属性定义：
+
+Kotllin: var val 局部属性。 by extra 通过 Project,Task 定义的附加属性。(继承自 ExtensionAware 的类均有该属性扩展)
+Groovy: def 局部属性。 ext { } 定义的附加属性。
+附加属性在 Project,Tasks,SourceSets 对象中均单独存在附加属性。该处的 extra(ext) 实际上获取的是 ExtensionAware#getExtensions（ExtensionContainer）#getExtraProperties(ExtraPropertiesExtension) ExtraPropertiesExtension内部本质上是通过 HashMap 存储附加的属性字段。
+
+Groovy 的一些特殊的语言特性[参见]:[https://docs.gradle.org/5.6.4/userguide/writing_build_scripts.html]
+其中包括闭包（closure)中的 delegate，调用方法命名参数模式转换成 map 模式。
+
+
+#### init.gradle(init.gradle.kts)
+
+#### setting.gradle(setting.gradle.kts)
+
+#### build.gradle(build.gradle.kts)
+
 ## GradleMain/GradleWrapperMain
 
 - gradle-wrapper-x.x.x.jar
@@ -806,6 +838,14 @@ TODO:://功能和目的
   
   可以用于表示一组 dependencies ,classpath, src files 。同时可以与 Task 任务相关联用于跟踪这一组任务是由那个 Task 产生的，或者是要交由哪个 Task 进行消费的。AbstractFileCollection 为该接口的主要实现基类。
   TODO://该处的 FileCollection 为 Task 构建任务和相关文件的重点
+
+  *FileCollection 设计成可以实时反映文件变化的，如 FileCollection#filter 之后产生的 FileCollection 如果系统文件改变了，也会反映到当前 FileCollection 迭代产生的 List\<File\> 上面以及后面 filter 产生的 FileCollection。即 FileCollection 不是创建之后就不再改变的，而是可以实时反映文件目录变化的*
+
+  *与 FileTree 不同的是该组文件不需要有任何相关连的关系，FileTree 包含的文件则要求有共同的父文件*
+  *FileTree 在拷贝文件时会保留目录层级关系，FileCollection 在拷贝文件时则不会保留文件层级关系*
+
+  即 FileTree 是带有层级关系的文件数据结构表示，FileCollection 则是 flat 摊平的文件数据结构表示。FileTree 继承自 FileCollection 因此使用 FileCollection 的地方均可以使用 FileTree 表示。
+
   主要的 FileCollection 分为以下几类
   
   - AbstractFileCollection

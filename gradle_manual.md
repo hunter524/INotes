@@ -92,7 +92,7 @@
 
 ### buildSrc
 
-buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目录.其中可以存放共用的gradle脚本,gradle插件项目(kotlin,java项目).为当前项目内部提供共享的脚本和插件.gradle 根项目及子项目会默认依赖和编译该项目.jj
+buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目录.其中可以存放共用的gradle脚本,gradle插件项目(kotlin,java项目).为当前项目内部提供共享的脚本和插件.gradle 根项目及子项目会默认依赖和编译该项目.
 
 ## Build Cache
 
@@ -108,9 +108,40 @@ buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目�
 
 ## Project
 
+### ExtensionContainer （Project#getExtensions) 扩展
+
+### Convention （Project#getConvention) 惯例
+
+该处的 Convention 接口其实是实现了 ExtensionContainer。
+
 ## Task
 
 创建 Task 时可以通过 Map 指定 Task 相关的属性.属性名称如下: name,description,group,type,dependsOn,overwrite,action,constructorArgs.DefaultTaskContainer#create(Map<String,?>)用于解析Map参数创建对应的Task.
+
+### Copy（文件复制）
+
+继承自 AbstractCopyTask.
+
+- 实现文件从一个目录复制进入另外一个目录，并且添加过滤匹配规则
+- 通过 from 结合 Project#zipTree Project#tarTree 实现zip文件的解压复制和归档文件的复
+
+### 文件移动/文件重命名
+
+文件移动的相关操作 gradle 没有内建提供相关支持，需要使用 Gradle 集成的 Project#ant 组件对文件提供相关支持。GRADLE_HOME/lib 目录下内置了 ant-1.9.14.jar 等 ant 构建相关的 jar 包以提供对 ant 构建任务和命令的支持。gradle 文件的移动则依赖于 ant 构建工具提供的任务。
+
+文件的重命名任务则只需要依赖于 CopySpec#rename 配合 Copy 任务即可完成。
+
+### 文件内容的过滤/替换操作
+
+使用 CopySpec#expand,CopySpec#filter(Token),CopySpec#filter(Closure) 方式通过模板方式替换制定 token,通过 Closure 闭包返回修改后的字符串方式。模板方式分别支持 Ant 样式模板，GString 样式模板，Groovy 的 SimpleTemplateEngine 模板引擎。
+
+### Zip/Tar//Jar/War/Ear （文件压缩）
+
+上述 Task 均继承自 AbstractArchiveTask ，同时 AbstractArchiveTask 又继承自 AbstractCopyTask
+
+### Delete (文件删除)
+
+可以使用 Delete 任务和 Project#delete 指令实现文件的删除操作。但是匹配待删除文件时无法使用像 CopySpec 这样的 include,exclude 指令进行文件的过滤和包含。需要使用 FileTree 和 FileCollection 相关的指令进行文件的过滤和筛选。
 
 ### Task依赖管理TIPS
 
@@ -118,4 +149,26 @@ buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目�
 - shouldRunAfter,mustRunAfter,shouldRunAfter 只建立Task之间的执行顺序,但是不建立 task 之间的依赖关系.(A.shouldRunAfter(B) 执行 A ,B不会被执行.A.shouldRunAfter(B)&& A.dependsOn(B),执行A时B才会被执行)
 - finalizedBy ,当前任务执行结束之后才会执行其他任务.
 - 建立 Task 之间的依赖关系时指定的 Task 未必要已经被创建.(即可以先指定依赖,稍后再创建被依赖的Task,文档称其为惰性依赖)
-- defaultTasks 用于配置 gradle 命令不携带任何参数时需要执行的 Task 任务.
+- defaultTasks 用于配置 gradle 命令不携带任何参数时需要执行的 Task 任务
+  
+## 文件操作
+
+FileTree 与 FileCollection 是 gradle 文件操作 API 的核心。java 编译中的 SouceSet 数据抽象则持有待编译文件，资源文件，编译完成的文件的 FileCollection.
+
+FileTree 继承自 FileCollection 因此能使用 FileCollection 的地方均可以使用 FileTree 代替。
+
+### FileTree
+
+层级的文件集合表示，使用Project#filetree,Project#zipTree,Project#tarTree 均可以获得 FileTree 的文件描述，其中zipTree 表示 zip 压缩文件的描述，tarTree 表示归档文件的描述。fileTree 则表示普通文件目录的描述。
+
+上述的 Project#zipTree,Project#tarTree 其实是 Gradle 帮助我们完成了 zip,tar 文件的读取和解压操作。将其转换成为了 Gradle 使用者所关心的 FileTree 文件格式。
+
+### FileCollection
+
+flat 的文件集合表示。使用 Project#file,Project#files 可以获得，其只表示当前引入的目录或者文件，不包含目录下的子文件，而 FileTree 包含一个目录时也会其目录下的子文件。
+
+### CopySpec
+
+CopySpec 可以通过 Project#copySepc 进行创建，并且独立于 Task,因此 CopySpec 可以被独立的进行共享。同时 CopySpec 也是具有层级关系，可以被层级嵌套。
+
+CopySpec#with(CopySpec) 可以将一个Spec 叠加到另外一个 Spec 上面。
