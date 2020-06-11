@@ -950,17 +950,40 @@ TODO:://功能和目的
   
 创建可以被统一管理的线程池。实现类为 DefaultExecutorFactory。如:可以一次性关闭所有由该线程池工厂创建的 ManagedExecutor.
 
-### Gradle 的监听器
+### Gradle 中的监听器
 
 #### org.gradle.api.invocation.Gradle 中的执行阶段监听器
 
+Gradle 的监听器主要是通过 Gradle 对象进行添加。用于监听 gradle 的各个操作流程。
+
 - org.gradle.BuildListenner
+  
+  监听回调 Gradle 项目构建的整体的生命周期。如：gradle 开始构建，setting 配置开始评估加载，project 文件开始被加载，project 配置被评估加载，gradle 构建完成。
+
 - org.gradle.api.execution.TaskExecutionGraphListener
+
+  Task 任务执行树已经被评估，形成 Task 任务的执行树。
+
 - org.gradle.api.ProjectEvaluationListener
+
+  根据 Project 配置文件开始配置 Project 对象 和 完成 Project 对象的配置。
+
 - org.gradle.api.execution.TaskExecutionListener
+
+  Task 开始执行的监听器，task 即将开始执行 和 结束执行。*无论 Task 是成功执行，还是执行过程中抛出异常，该处回调均会触发*
+
 - org.gradle.api.execution.TaskActionListener
+
+  Task 的 Actions 开始执行 与 结束执行。本质上与上面的 TaskExecutionListener 没有什么太大区别。
+
 - org.gradle.api.logging.StandardOutputListener
 - org.gradle.api.artifacts.DependencyResolutionListener
+
+#### TaskContainer 中的监听器
+
+- TaskContainer#whenTaskAdded
+  
+  监听 Task 的添加事件
 
 #### org.gradle.internal.event.ListenerManager
 
