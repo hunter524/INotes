@@ -662,7 +662,11 @@ TODO:://功能和目的
 
 ### Gradle 中的日志打印子系统
 
-- LoggingManagerInternal
+  Gradle 的日志子系统使用的是 SLF4J 库的日志定义，并且替换了 System.out 的日志输出为 Logger 的 Quite 模式。
+
+- LoggingManagerInternal/DefaultLoggingManager
+
+  提供 gradle 日志系统的配置，修改 System.err,System.out 对应 Logger (slf4j) 日志级别的修改。
 
 ### gradle 命令参数解析
 
@@ -767,6 +771,31 @@ TODO:://功能和目的
 #### Project#Configurations(ConfigurationContainer)
 
 #### Project#Artifacts(ArtifactHandler)
+
+#### NamedDomainObjectContainer
+
+为上述 Task(TaskContainer),Configuration(ConfigurationContainer),SourceSet(SourceSetContainer)提供容器和便捷的创建相关容器内部放置的对象的操作。
+
+- TaskContainer
+  
+- ConfigurationContainer
+  
+  目前看来主要用于保存 compileClasspath 等依赖，以及该项目提供的 Artifact (产品)。产品以及依赖均是通过 Configuration 向外进行提供。一个 Configuration 既可以向外提供产品，也可以标记该项目需要被提供的依赖。
+  产品由 PublishArtifact 及其子类表示该项目提供的不同类型的产品如：LibraryArtifact,PomArtifact,MavenArtifact 等等产品。依赖及其依赖规则，则由 Dependency 及其子类表示，如：ProjectDependency，FileCollectionDependency，ExternalDependency，ModuleDependency。分别表示项目的依赖，第三方库的依赖，以及第三方库的依赖以及级联依赖的剔除和过滤规则。
+
+  *每一个JAVA(Android)项目均会引用 BasePlugin,其中会创建一个名称为 default 的 Configuration 其会在 JavaPlugin 中将 runtimeClassPath 添加进入 Cofiguration TODO:// JavaPlugin 中会定义了依赖以及产品相关的常量*
+
+  Project#dependencies,Project#artifacts 只是便捷的提供了分别配置 Configuration 中的 Dependency 以及 Artifact 的 DependencyHandler ， ArtifactHandler.
+  dependencies 语法
+  ```JAVA
+   dependencies {
+    runtimeOnly(project(":producer"))
+  }
+  ```
+
+  其中 runtimeOnly 为配置名称，project(":producer") 为依赖标记。 project 表示调用 Project#project 方法检索到的当前构建项目中的子项目。后面还可以传入 Closure 闭包，表示对 Dependency 进行配置。该处被配置的 Dependency 通常为 ModuleDependency 通过 ModuleDependency#exclude 进行级联依赖的配置流程。
+
+- SourceSetContainer
 
 ### 基础执行环境
 

@@ -128,11 +128,13 @@ buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目�
 
 - includeFlat
   
-  包含根 Project 的兄弟目录作为子项目构建。(只能包含兄弟目录，不能包含兄弟目录的子目录，因为无法传递： /\ 等目录分割符作为参数)
+  包含 Root Project 的兄弟目录作为子项目构建。(只能包含兄弟目录，不能包含兄弟目录的子目录，因为无法传递： /\ 等目录分割符作为参数)
 
 - includeBuild
   
   以 / 作为目录分割符，相对于当前根目录进行解析。与 include 不同的是其只包含指定的目录项目，不包含层级目录中的项目。
+  includeBuild 包含的 Project无法被 Project#allProject 获取和配置。
+  使用 includeBuild 则使用了 [Gradle CompositeBuild][https://docs.gradle.org/5.6.4/userguide/composite_builds.html#composite_build_intro] 特性.用于组合两个独立的 Gradle 项目参与构建。
 
 - project
 
@@ -166,7 +168,7 @@ Project#getConfigurations实际上返回的为 ConfigurationContainer其内部�
 
 - TaskState
   
-  表示 Task 的执行状态的类。Skiped,Executed,Uptodate,NoSource,Fail(执行失败)
+  表示 Task 的执行状态的类。Skiped,Executed,Uptodate,NoSource,Fail(执行失败)，
 
 ### Copy（文件复制）/Sync(目录同步)
 
@@ -229,3 +231,84 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
 子 CopySpec 同时也会继承 附 CopySpec 的 into,include,exclude,rename,filter 等配置。
 
 使用 Project#copy API 则无需创建 Copy Task 即可使用 CopySpec 配置 Copy 操作，同时执行 Copy 操作。
+
+## Gradle 执行阶段
+
+### Init
+
+### Configuration
+
+配置阶段依赖于*配置注入*,而非继承的方式进行共用配置的提取。配置注入 则是将配置与待配置对象进行隔离，通过类似依赖注入的inject 机制进行配置的配置操作。继承共用配置则是将配置提取到共有的父类进行配置操作。
+
+### Execution
+
+## Gradle 项目目录结构
+
+### 项目目录下的重要文件
+
+- init.gradle/init.gradle.kts
+  
+  初始化脚本，在 settings.gradle 执行之前执行，该处可以获得 Gradle 对象，无法直接获得 Project 对象，但是可以指定稍后怎么配置 Project.
+  如果项目中存在 buildSrc 项目，则 init 脚本会被执行两次，buildSrc 项目被构建视为单独的项目。
+
+  init脚本可以放置在 GRADLE_HOME/init.d 与 GRADLE_USER_HOME/init.d 用于所有 GRADLE 项目的初始化操作。也可以使用 -I --init-script 指定单个项目的 init 初始化脚本
+
+- settings.gradle/settings.gradle (根目录下)
+  
+  根目录下指示项目目录布局，包含哪些子项目。
+
+- build.gradle/build.gradle.kts (根目录与每个子项目目录)
+  
+  根项目以及每个子项目的构建配置文件
+
+- gradle.properties (根目录下 or GRADLE_USER_HOME 目录下)
+
+  根目录下用于配置单个项目所独有的构建属性，该属性会影响 GRADLE 的构建行为。GRADLE_USER_HOME 目录下则影响当前用户的所有的 GRADLE 项目的构建行为。
+  
+## JAVA 内置 Plugin 及常见 task
+
+### 常见Plugin
+
+- JavaGradlePluginPlugin(org.gradle.java-gradle-plugin.properties,kotlin 简短名称:java-gradle-plugin)
+  
+  gradle 插件项目依赖的 Plugin.依赖 JavaPlugin
+
+- ApplicationPlugin(org.gradle.application.properties,kotlin 简短名称:application)
+  
+  java 应用项目的plugin，提供 java 文件编译，lib jar 打包，zip,tar 并且生成java 应用的启动脚本。依赖 JavaPlugin，DistributionPlugin
+
+- JavaLibraryPlugin(org.gradle.java-library.properties,kotlin 简短名称:java-library)
+
+  java-library 项目的 Plugin.依赖 JavaPlugin
+
+- JavaLibraryDistributionPlugin(org.gradle.java-library-distribution.properties ,kotlin 简短名称:java-library-distribution )
+
+- JavaPlugin (org.gradle.java.properties,kotlin 简短名称: java )
+  
+- JavaBasePlugin (org.gradle.java-base.properties,,kotlin 简短名称: java-base )
+  
+- BasePlugin (org.gradle.base.properties,kotlin 简短名称: base )
+  
+- GroovyPlugin(org.gradle.groovy.properties,kotlin 简短名称: groovy )
+  
+- GroovyBasePlugin(org.gradle.groovy-base.properties,kotlin 简短名称: groovy-base )
+
+### 常见 task
+
+- build
+  
+  只构建和测试当前项目。根目录运行则构建测试当前根项目和所有子项目
+
+- buildNeeded
+
+  构建和测试当前项目以及所依赖的项目
+
+- buildDependents
+
+  构建和测试当前项目以及依赖当前项目的项目
+
+## 自己项目中的 TODO 内容
+
+- 抽离 AARC 项目的共用配置,并且通过 Project#extra 配置 第三方插件的 lib 和 App 项目。
+- 尝试将 AARC 子项目的依赖关系配置抽取提出到一个共用的地方。
+  
