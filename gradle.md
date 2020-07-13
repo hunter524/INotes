@@ -951,9 +951,14 @@ TODO:://功能和目的
 
 #### NotationConverter
 
-为 gradle dsl 提供的标记解析基础。
+为 gradle dsl 提供的标记解析基础。如将 com.google:guava:18.04 解析成为 Dependency 对象。
 
 - 文件路径标记转换成为 File
+- org.gradle.api.internal.notations 包下的转换器将字符串解析为依赖
+
+#### NotationParser
+
+通常持有 NotationConverter 来进行解析，自己并不真正执行解析任务。但是外部API 通常使用 NotationParser 执行解析任务，并不使用 NotationConverter 直接执行解析任务。
 
 #### 进程执行环境工具
 

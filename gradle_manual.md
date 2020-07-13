@@ -31,6 +31,10 @@
   
   用于展示当前项目的maven依赖结构，其是按照项目展示依赖的结构的，在根目录下执行则展示的是根目录的依赖结构，在app目录下执行即展示的是app目录的maven依赖。
   在Android 项目中其通常用于分析依赖关系和解决依赖冲突。
+
+  gradle dependecies --configuration <configure_name> cfg_name 可以为 api,compileOnly,runtimeOnly 等等。
+
+  gradle dependencyInsight:使用 --dependency , --configuration , --singlepath 可以过滤指定依赖，指定配置以及指定但行显示。主要用于追踪指定依赖是如何被依赖上来的。为 dependencies 的反向操作，dependencies 为正向操作查看当前依赖以及级联依赖。
   
 - gradle properties
   
@@ -112,9 +116,9 @@ buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目�
 
 ## Composite Build
 
-并非是多项目结构构建(一个 Gradle Project 通过 setting 文件,包行多个sub_project),组合构建的项目实际上是并无直接关联的两个项目(独立的 gradle项目) 原本通过依赖 artifacts(项目的产出)更改为直接依赖该项目的模式.
+并非是多项目结构构建(一个 Gradle Project 通过 setting 文件,包含多个sub_project),组合构建的项目实际上是并无直接关联的两个项目(独立的 gradle项目) 原本通过依赖 artifacts(项目的产出)更改为直接依赖该项目的模式.
 
-组合构建比多项目结构构建相互之间的依赖更加独立.(该层之间的独立是由)
+组合构建比多项目结构构建相互之间的依赖更加独立.
 
 ## Settings
 
@@ -133,7 +137,7 @@ buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目�
 - includeBuild
   
   以 / 作为目录分割符，相对于当前根目录进行解析。与 include 不同的是其只包含指定的目录项目，不包含层级目录中的项目。
-  includeBuild 包含的 Project无法被 Project#allProject 获取和配置。
+  includeBuild 包含的 Project无法被 Project#allProject 获取和配置。includeBuild 即为组合构建
   使用 includeBuild 则使用了 [Gradle CompositeBuild][https://docs.gradle.org/5.6.4/userguide/composite_builds.html#composite_build_intro] 特性.用于组合两个独立的 Gradle 项目参与构建。
 
 - project
@@ -197,6 +201,10 @@ Sync 任务继承自 Copy 任务其与 Copy 任务不同的是 Sync 会保持 de
 
 可以使用 Delete 任务和 Project#delete 指令实现文件的删除操作。但是匹配待删除文件时无法使用像 CopySpec 这样的 include,exclude 指令进行文件的过滤和包含。需要使用 FileTree 和 FileCollection 相关的指令进行文件的过滤和筛选。
 
+### GradleBuild
+
+在当前项目中构建其他目录下的 Gradle 项目。*gradle 文档强烈不建议使用该 Task,因为其在某些场景下会导致意外的构建状况发生，无法保证构建的正确性* Gradle 建议采用多项目构建或者组合构建的方式，完成 Gradle Build 完成的任务。
+
 ### Task依赖管理TIPS
 
 - dependsOn 建立 task 之间的依赖关系,并不建立task之间的执行顺序.
@@ -232,6 +240,335 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
 
 使用 Project#copy API 则无需创建 Copy Task 即可使用 CopySpec 配置 Copy 操作，同时执行 Copy 操作。
 
+## 依赖配置
+
+依赖配置分类为 implementation,api,runtimeOnly,compileOnly,annotationProcessor，分别表示不同的依赖方式，不同的依赖均会配置进入 Configuration 中。依赖配置通常通过 Project#dependencies 提供的 DependencyHandler 进行，不建议使用者直接操纵 Configuration 进行依赖配置。配置某个依赖时可以传递进入某个闭包，即通过 ExternalModuleDependency 配置该依赖的依赖约束（如：是否进行级联依赖？exclude 剔除指定级联依赖的 group 或者 module)
+
+### 依赖类型
+  
+  使用 Project#dependencies 进行依赖配置。
+
+- moudle
+  
+  通过 group,name,version 依赖第三方 maven,ivy 仓库中的组件。通过 DependencyStringNotationConverter，ModuleIdentifierNotationConverter，DependencyMapNotationConverter 三个解析器解析该类型依赖的不同表述形式。
+
+  gradle 内部使用 Dependency 的子类 ExternalModuleDependency 描述该依赖。
+
+- file
+
+  依赖 project/libs 或者其他目录下的 jar,aar 等模块文件。同时可以通过 Project#files,Project#file 建立被依赖的文件，以及产生该文件的task的关联。即满足该依赖必须先执行该task.通过 DependencyFilesNotationConverter 解析文件依赖描述，该依赖的描述通常为 FileCollection 及其子类如：ConfigurableFileCollection，ConfigurableFileTree 不能直接为 File 即该处可以使用 Project#files,Project#fileTree 描述该文件依赖，不能使用 Project#file 描述该依赖。
+
+  gradle 内部使用 Dependency 的子类 FileCollectionDependency 描述该依赖。
+
+- project
+
+  gradle 多项目构建中描述 Project 之间的依赖。
+
+  gradle 内部使用 Dependency 的子类 ProjectDependency 描述该依赖。
+
+- Gradle 内置的特殊依赖
+
+  定义在 DependencyHandler 内部，如：gradleApi 定义依赖当前的 gradle api jar 通常用于开发Plugin 和自定义任务,gradleTestKit 通常用于进行单元测试，集成测试的开发，localGroovy 依赖 gradle 内置的 Groovy 通常用于使用 groovy 语言开发 plugin ,task.
+
+### 依赖仓库类型
+
+- flatDir
+  
+  本地非 maven 仓库格式的布局文件夹中的文件依赖。类似于 libs 文件及其下面文件的直接依赖。
+
+- mavenCentenral/jcenter/google
+  
+  [maven 中央仓][https://repo.maven.apache.org/maven2/]
+  [jcenter 中央仓][https://jcenter.bintray.com/]
+  [google 中央仓][https://maven.google.com/]
+  [google maven 基地址][androidx.multidex:multidex:2.0.1]
+
+- mavenLocal
+
+  用户本地的 maven 仓库。用户需要安装 maven 工具。本地仓的存储规范需要按照中央仓的目录存储规范进行文件夹布局。通常用于用户将 Project 发布到本地，再通过本地进行依赖的操作。本地仓的默认目录 USER_HOME/.m2/repository 也可以通过 settings.xml 配置文件进行本地仓库的配置。配置优先级为 USER_HOME/.m2 > M2_HOME/conf
+
+- maven(自定义maven 仓库地址)
+
+  惯例使用 maven 添加私有仓库，配置仓库地址。实际上也可以使用 mevenCentral,jcenter,google,ivy 设置私有仓库地址，配置私有仓库属性
+
+- ivy
+
+  apache ant 的子项目，主要负责 依赖管理
+
+- 仓库依赖的配置模式
+
+  不同的仓库（ivy,maven)，不同类型的依赖(java,js) 对于依赖的命名方式对应在仓库中的位置是不同的。
+  其中maven 类型的仓库有着对应的文件在仓库中的布局规范，ivy 仓库可以定义仓库中文件的位置规范。(通过IvyArtifactRepository#patternLayout 对仓库的依赖布局进行配置,声明依赖时依旧采用orgnization:group:version:classifier@ext 的模式进行声明，对应到仓库的位置再做相应的转换,其中 classifier 表示分级，如：java 中的 jar,doc,src 表示 class 文件，doc 文件，源码文件，js 中 min 表示压缩混淆，不加表示未压缩混淆)
+
+- MavenArtiffactRepository#mavenContent/ArtifactRepository#content
+
+ gradle 5.1 版本新添加的特性，用于指示指定的 dependecies 只在指定的仓库可以查找到，或者用于指定指定的 dependencies 在指定的仓库无法查到。据官方文档说这样有助于提升性能，可靠性 和 安全性。
+
+### 依赖配置特性
+
+每一个依赖均属于一种依赖类型。
+依赖类型：
+before 3.0 : compile,provided,apk,
+after 3.0 : compile->(implementation,api) provided->(compileOnly) apk->(runtimeOnly)
+
+- version 限制语义
+
+  用于限制和指定依赖版本，通过 VersionConstraint 的 strictly,require,prefer,rejects 进行依赖版本的限制。
+
+- 依赖约束
+
+  通过 api/implementation "group:artifact:version"{
+    配置下述依赖特性
+  }
+  ModuleDependency#isTransitive/Configuration#isTransitive: 是否对该依赖的级联依赖进行导入,可以在配置级别进行控制，也可以在依赖级别进行控制。
+  ExternalDependency#isForce：是否对该类型的依赖强制使用某个版本，而不进行自动选择
+  Configuration#resolutionStrategy: 对 Configuration 中的某个依赖使用特定某个版本，该处只能控制依赖的版本而不能控制是否使用该依赖
+
+- DependencyHandler#platform/DependencyHandler#enforcedPlatform
+
+  使用 maven 的 bom 类型的 pom 文件对依赖版本进行限制。platform 的限制较弱，只有在依赖未声明版本号时使用 bom 中的版本号。enforcedPlatform 则限制较强，即使依赖声明了版本号也会使用 bom 中的版本号。
+
+- DependencyHandler#components
+
+  通过 ComponentMetadataHandler/ComponentMetadataDetails 对依赖进行配置，使用 bom 约束 或者替换依赖，约束版本号限制。
+
+- Component Capabilities (gradle 4.7 添加该功能)
+  
+  避免具有相同功能的不同的依赖库被重复引用。可以通过 DependencyHandler#getComponents 获得 ComponentMetadataHandler，再通过 ComponentMetadataHandler#all 获得处理每一个依赖的 Component 的机会即 ComponentMetadataDetails 再通过 ComponentMetadataDetails#allVariants 获得 VariantMetadata 进而可以对 Compoent 中的没一个 Variant 变种获得处理机会。再通过 VariantMetadata#withCapabilities 告知 gradle 该依赖所能完成的功能。当 Gradle 感知到有两个相同的依赖完成同一个功能时即进行报错提示。
+
+  当 Capabilities 相关的依赖出现冲突时可以使用 使用上面提到的 Configuration#ResolutionStrategy#capabilitiesResolution 去解决功能依赖上的冲突
+
+- Project#dependencyLocking/ResolutionStrategy#activateDependencyLocking （gradle 4.8 添加的特性）
+
+  对依赖进行锁住，避免依赖动态版本导致的依赖的更新。
+  通过 gradle <task_name> --write-locks 生成lock 文件，lock 文件位于 gradle/dependency-locks/目录下。
+  生成 lock 文件之后再更改依赖版本编译是无法编译通过的，因为其不符合 lock 文件的依赖约束。
+
+  gradle <task_name> --update-locks group:artifact:version,group*:artifact*:version* 只更新制定的依赖的lock文件，可以使用 * 通配符号匹配指定的依赖。
+
+  停用 lock 的两种方式：删除 xxxx.lockfile 文件。不调用 Project#dependencyLocking/ResolutionStrategy#activateDependcyLocking 方法，这种情况即使 xxx.lockfile 文件存在也不会启用锁。
+
+- resolutionStrategy.cacheDynamicVersionsFor/resolutionStrategy.cacheChangingModulesFor
+
+  分别用于配置动态版本依赖的本地版本缓存有效期和 SNAPSHOT 依赖的依赖文件的缓存有效期。 执行任务时也可以通过命令行参数控制缓存使用策略。 --offline 强制使用本地缓存，--refresh-dependencies 强制本地version缓存和snapshot 缓存无效，从服务端重新刷新缓存。
+
+- ResolutionStragegy 的使用
+  - ResolutionStragegy#eachDependency（resolve 阶段)
+
+    build.gradle 直接声明的依赖，和依赖的级联依赖均可以被获取和重新指定解析。
+
+    - 统一不同module 依赖的不同版本的第三方库，如 liba 依赖 gson 2.0 ,libb 依赖 gson 2.8.6,app 同时依赖  liba与libb 这时 gson 库的依赖则存在版本冲突。gradle 默认选用高版本的库。此时也可以使用  ResolutionStrategy#eachDependency 过滤匹配对 gson 的依赖，指定使用特定的版本。
+
+    - 使用 default 标记库的依赖版本，提供统一Plugin 解析 group:name 对应的 defaul 具体版本号。主要用于通  过 Plugin 统一组织内部使用的第三方库的版本。存在的问题是版本依赖不再清晰的在 build.gradle 构建脚本中清晰  可见，需要 gradle dependencies 任务查看。或者使用 IDE 查看。
+  
+    - 对特定 group:name 的 特定版本的 artifact 实现黑名单机制。可能该版本的库存在不稳定性，开源协议，特殊  bug等等原因,替换该 group:name 的特定版本为其他稳定版本。主要用于公司内部的后置检查替换。*该处的  dependency 替换与 setForce 属性不同，该处的版本替换不影响其他module 依赖更高版本导致的 gralde 默认使用  更高版本的依赖选择*
+  
+    - 兼容性的版本库的替换。如:使用 log4j-over-slf4j 替换 log4j,使用 groovy 替换 groovy-all.这种替换的  目地通常是 jar 库依赖的精简，实现的统一，有功能实现替换成空功能实现。
+
+  - ResolutionStrategy#dependencySubstitution
+
+    解析完成之后用来替换特定的依赖，通常也可以完成 resolve 阶段可以完成的绝大部分的替换任务。
+  
+    - DependencySubstitutions#all
+
+      遍历所有的 Dependency 执行替换规则。
+
+    - DependencySubstitutions#module,DependencySubstitutions#project/DependencySubstitutions#substitute
+
+      先使用 module/project 选取指定的依赖，再通过 substitute 执行替换规则。使用方法为：substitute (module) with (module)
+
+  - ResolutionStrategy#componentSelection
+
+    selection 只能根据 group,name,version 拒绝指定版本的使用。
+    当拒绝 gradle 选择的特定版本时，gralde 会自动向下查找版本提供用户再次进行选择。如果不拒绝该版本则使用该版本作为依赖。如：build.gradle 配置依赖 com.google.code.gson:gson:2+ gradle 会自动查找到最新版本为 2.8.6 提供给用户进行 Selection 当用户拒绝该版本时，则会使用 2.8.5 版本提供给用户进行选择，用户不拒绝则使用该版本作为依赖。
+
+  - DependencyHandler#modules/ComponentModuleMetadataHandler#module/ComponentModuleMetadataDetails#replacedBy
+
+    两种依赖均存在时使用 replacedBy 替换 module 依赖。但是这种替换只有 module 依赖和 replacedBy 依赖均存在时才执行这种替换。因此并不能替换 resolve 和 substitution 的相关功能。且该 module replacedBy 替换执行在 resolve 阶段之前。即在 Configure 阶段即执行 module 的替换操作。
+
+  - Configuration#withDependencies/Configuration#defaultDependencies
+
+    在 build.gradle 脚本 configure 阶段执行，在 resolve 阶段之前执行。用于遍历 Configuration 中的所有依赖和向 Configuration 中添加默认依赖。
+
+- 依赖的解析流程
+
+replacedBy,withDependencies,defaultDependencies阶段,处于解析build.gradle 脚本的阶段 -> Configuration#ResolutionStategy#each(resolve 阶段）->Configuration#ResolutionStategy# dependencySubstitution (substitution 阶段)->DependencyHandler#getComponents(解析直接依赖的 ComponnetMetaData 数据) -> Configuration#ResolutionStategy#componentSelection(component selection 阶段）Configuration#ResolutionStategy#each(resolve 阶段）->Configuration#ResolutionStategy# dependencySubstitution (substitution 阶段)
+
+resolve/substitution 阶段会被执行两次，一次是在解析 Componnet 依赖的 metaData 数据之前，一次是在解析完成之后。
+
+- ComponentMetadataDetails
+  
+  TODO:// 该 Details 有什么用？
+
+### Cofiguration/Dependency/PublishArtifact
+
+### Configuration#getIncoming
+
+- ResolvableDependencies
+  
+  通过 Configuration#getIncoming 获得该对象实例。表示可以被解析的依赖。该依赖被获取之后即被解析，被解析完成之后可以使用 ResolvableDependencies#getFiles 只获得解析的依赖文件。ResolvableDependencies#getResolutionResult 获得依赖之间相互的依赖关系图。ResolvableDependencies#getArtifacts 获得依赖的一些元信息。
+
+- ResolutionResult
+
+  通过 ResolvableDependencies#getResolutionResult 该 ResolutionResult 携带了依赖层级和级联依赖关系的视图。表示某个依赖是如何被引入的。通过该依赖的级联图，可以追溯某个依赖是被如何引入的。
+
+- DependencyResult
+
+  该处只提供依赖的解析信息（如：被谁依赖，依赖的约束条件，2+ 等），但是不提供解析完成的依赖的模块的信息，该信息由下面的 ComponentResult 提供解析完成的依赖信息。
+  分为两大子类：ResolvedDependencyResult， UnresolvedDependencyResult  分别表示已经被成功解析的依赖和无法被成功解析的依赖。
+
+  通过 ResolutionResult#getAllDependencies 可获得该类的Set集合对象。用于表示当前该依赖。
+
+- ComponentResult
+
+  通过 DependencyResult#getFrom,ResolvedDependencyResult#getSelected 均可以获得对象。
+  用于描述依赖的组建的信息（如：group,name,version,variant 等信息），还通过 ResolvedComponentResult#getDependencies 与 DependencyResult 建立树形结构，用于表示依赖的级联关系。
+
+  组件查询结果分为以下三种类型：
+    ComponentArtifactsResult
+    ResolvedComponentResult
+    UnresolvedComponentResult
+
+### Configuration#getOutgoing
+
+### DependencyHandler#createArtifactResolutionQuery
+
+用于查询当前项目依赖的 module 的一些元数据信息。
+
+- ArtifactResolutionQuery
+
+  forComponents，forModule 指定要查询的组件的坐标，GAV 模式或者 ComponentIdentifier 描述符。
+
+  withArtifacts 指定要获取的 Component 和 Artifact 类型。
+
+- ArtifactResolutionResult
+
+  通过 ArtifactResolutionQuery#execute 可以获得该对象。该对象用于表示要查询的依赖的模块解析结果。通过ArtifactResolutionResult#getComponents 可以获得前面描述的 ComponentResult 进而获得该依赖的详细信息，通常是级联依赖的相关信息。通过 ArtifactResolutionResult#getResolvedComponents 获得 ComponentArtifactsResult 表示 Component 的 Artifact 的查询结果。
+
+- ArtifactResult
+
+  通过 ComponentArtifactsResult#getArtifacts 获得 ArtifactResult 的Set 用于表示查询获得的 Artifact 信息。
+  通过 ResolvedArtifactResult#getFile 即可获得查询到的 Artifact 的文件信息。如果是 pom 等 xml 文件即可通过 Xml 相关的解析工具用于获得 xml 文件中的各个节点的信息。如：可以通过 groovy.utils.XmlSlurper 对 xml 文件进行解析操作。
+
+  ArtifactResult 分为以下两种类型:
+  ResolvedArtifactResult
+  UnresolvedArtifactResult
+  
+- Component
+  
+  Library
+  下述四种类型通常为 java 项目依赖的组件类型。
+  Application
+  IvyModule
+  JvmLibrary
+  MavenModule
+  下述四种组件类型通常为 c,c++ 依赖的组件类型。
+  DefaultPrebuiltLibrary
+  NativeExecutable
+  NativeLibrary
+  PrebuiltLibrary
+  
+- Artifact
+  
+  下述四种 Artifact 为组件提供的一些元信息。
+
+  IvyDescriptorArtifact
+  JavadocArtifact
+  MavenPomArtifact
+  SourcesArtifact
+
+### Configuration#attributes
+
+该方法返回的为 AttributeContainer 为 Configruation 添加额外的属性。通常是为 Consumer 和 Produce 做额外的变种匹配工作。
+
+- Attribute
+  
+  指定 Attribute 属性的key值，并且指定 Atrribute 属性对应的值的类型。Attribute 为 AttributeContainer 中的 key.
+
+- AttributeContainer
+
+  Attribute 作为 key.Attribute 指定的值类型的值作为值，存储在该容器中。
+
+#### AttributesSchema
+
+通过 DependencyHandler#getAttributesSchema 可以获得该类型。用于设置 Attribute 匹配时的兼容类型。如：Consumer 依赖 api 但是 Producer 没有 api 属性。此时可以配置兼容策略，Producer 的 api 兼容于 runtime,因此可以用 runtime 代替 api 提供给 Consumer 使用。
+
+- AttributeMatchingStrategy
+  
+  属性（变种）的匹配策略，内部持有 CompatibilityRuleChain 和 DisambiguationRuleChain 用于变种的兼容和消歧规则的匹配。
+
+- CompatibilityRuleChain
+
+  用于容纳下述的 AttributeCompatibilityRule 兼容规则。实现类同时也继承了 CompatibilityRule 用于对兼容属性的选择。一旦选择到合适的兼容变种，则不再进行后续的选择。
+
+- DisambiguationRuleChain
+  
+  用于容纳下述的 DisambiguationRuleChain 消歧规则。实现类同时也继承了 DisambiguationRule 用于对消歧规则的选择。
+
+- AttributeCompatibilityRule
+
+  兼容规则 Action 匹配动作的描述。
+
+- AttributeDisambiguationRule
+
+  消歧规则 Action 匹配动作的描述。
+
+- CompatibilityCheckDetails
+
+  传递给兼容规则 Action 进行匹配动作。
+
+- MultipleCandidatesDetails
+
+  传递给消歧规则 Action 进行匹配动作。
+
+- CompatibilityRule
+  
+  AttributesSchemaInternal#compatibilityRules 内部使用的属性。
+
+- DisambiguationRule
+  
+  AttributesSchemaInternal#disambiguationRules
+
+### Configuration 分类
+
+JAVA 项目中的 Configuration 分类。
+
+- default
+- api/implementation/runtimeOnly/compileOnly
+  
+  gradle 3.4 后新提供的四种依赖分类。
+
+- compile/provided/runtime
+
+  gradle 3.4 之前提供的依赖，更加粗犷，不能对依赖进行细分
+
+- apiElements/runtimeElements
+  
+- runtimeClasspath/compileClasspath
+
+- annotationProcessor
+
+- testCompile/testImplementation/testCompileOnly/testRuntime/testRuntimeOnly/testCompileClasspath/testAnnotationProcessor/testRuntimeClasspath
+
+### DependencyHandler#registerTransform
+
+  该处的 Transformer 与 Android 中使用的 ASM 等字节码插桩的 Trasformer 不同。Android 中使用的为 com.android.build.api.transform.Transform.但是目前 android 的 gradle 插件推荐使用 gradle 自带的 TransformAction 机制。但是 gradle 的该机制是从 gradle 5.3 才添加进入 gradle 的。
+
+- TransformAction
+- TransformParameters
+  
+  - @Input
+  - @InputFiles
+     上述用于标记输入的文件，参考 gradle  task 的输入标记。
+  
+- TransformOutputs
+
+  输出目录在  /GRADLE_USER_HOME/caches/transforms-2/files-2.1/<hash_code>/
+  java 项目中输入通常是原始的 jar 文件。
+
+- @InputArtifact
+- @InputArtifactDependencies
+
 ## Gradle 执行阶段
 
 ### Init
@@ -261,9 +598,9 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
   
   根项目以及每个子项目的构建配置文件
 
-- gradle.properties (根目录下 or GRADLE_USER_HOME 目录下)
+- gradle.properties (根目录下即 setting 文件的同级目录 or GRADLE_USER_HOME or GRADLE_HOME 目录下)
 
-  根目录下用于配置单个项目所独有的构建属性，该属性会影响 GRADLE 的构建行为。GRADLE_USER_HOME 目录下则影响当前用户的所有的 GRADLE 项目的构建行为。
+  根目录下用于配置单个项目所独有的构建属性，该属性会影响 gradle 的构建行为。GRADLE_USER_HOME/GRADLE_HOME 目录下则影响当前用户的所有的 gradle 项目的构建行为。该文件属性的加载由 DefaultGradlePropertiesLoader 负责进行加载。
   
 ## JAVA 内置 Plugin 及常见 task
 
@@ -272,6 +609,10 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
 - JavaGradlePluginPlugin(org.gradle.java-gradle-plugin.properties,kotlin 简短名称:java-gradle-plugin)
   
   gradle 插件项目依赖的 Plugin.依赖 JavaPlugin
+
+- JavaPlatformPlugin（org.gradle.java-platform.properties,kotlin 简短名称：java-platform
+
+  用于 构建 maven 的 bom 文件，用于协调相同平台下不同依赖的版本一致性。不同库的版本对齐。
 
 - ApplicationPlugin(org.gradle.application.properties,kotlin 简短名称:application)
   
@@ -284,6 +625,8 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
 - JavaLibraryDistributionPlugin(org.gradle.java-library-distribution.properties ,kotlin 简短名称:java-library-distribution )
 
 - JavaPlugin (org.gradle.java.properties,kotlin 简短名称: java )
+
+[java Plugin Manual][https://docs.gradle.org/5.6.4/userguide/java_plugin.html#java_plugin]
   
 - JavaBasePlugin (org.gradle.java-base.properties,,kotlin 简短名称: java-base )
   
@@ -312,3 +655,14 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
 - 抽离 AARC 项目的共用配置,并且通过 Project#extra 配置 第三方插件的 lib 和 App 项目。
 - 尝试将 AARC 子项目的依赖关系配置抽取提出到一个共用的地方。
   
+## References
+
+- [Gradle Src][https://github.com/gradle/gradle]
+
+- [Gradle GetStart Guide][https://gradle.org/guides/]
+
+- [Gradle Doc][https://docs.gradle.org/5.6.4/userguide/] guide 中的用例处于 gradle 项目目录的 /subprojects/docs/src/samples/userguide 子目录下。
+  
+- [Gradle Plugin][https://plugins.gradle.org/]
+  
+- [Gradle Api Doc][https://docs.gradle.org/5.6.4/javadoc/]
