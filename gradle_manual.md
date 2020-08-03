@@ -78,7 +78,7 @@
 
 - gradle buildEnvironment
   
-  自动内置在 gradle 构建项目内部的任务,用于查看gradle 的构建环境.主要用于查看 gradle 构建任务执行依赖的库,而并非构建的项目依赖的库
+  自动内置在 gradle 构建项目内部的任务,用于查看gradle 的构建环境.主要用于查看 gradle 构建任务执行依赖的库,而并非构建的项目依赖的库.*即 buildscript{dependencies {classpath "gourp:artifact:version"}}依赖的库*
 
 - gradle <task_execute> --exclude-task <task_exclude>
   
@@ -154,12 +154,16 @@ buildSrc目录置于根目录作为gradle 构建脚本,插件配置的默认目�
 ### ExtensionContainer （Project#getExtensions) 扩展
 
 Project#extra,Task#extra 获取的 Extra 配置即为 Project#ExtensionContainer#ExtraPropertiesExtension 配置。
+使用 Extension 可以很好的在 build.gradle/build.gradle.kts 中实现指定 extension 的 DSL 扩展模式修改属性值。
 
 ### Convention （Project#getConvention) 惯例
 
 该处的 Convention 接口其实是实现了 ExtensionContainer。惯例通常是通过 Plugin 插件添加进入的一些默认的习惯性的参数配置。如:通过 BasePlugin 默认为 AbstractArchiveTask （其子类为 JAR,EAR,WAR,TAR)归档任务配置的归档文件的输出目录及归档文件名称。
 
 Convention#getPlugins: 为Plugin 配置自己的 Convention 的地方。
+*从长远来看 Convention 是需要被废弃，其是历史原因遗留产物，因此不推荐使用 Convention.从源码来看 在Projet#extensions 和 Project#convention 中获取的均为 Convention 实例，但是该 Convention 实例继承了 ExtensionContainer*
+
+Convention 通过 DefaultConvention#plugins 自己持有/索引/添加 注册的 Convention 实例
 
 ### Configuration (Project#getConfigurations)
 
@@ -281,7 +285,7 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
   [maven 中央仓][https://repo.maven.apache.org/maven2/]
   [jcenter 中央仓][https://jcenter.bintray.com/]
   [google 中央仓][https://maven.google.com/]
-  [google maven 基地址][androidx.multidex:multidex:2.0.1]
+  [google maven 基地址][https://dl.google.com/dl/android/maven2/]
 
 - mavenLocal
 
@@ -489,6 +493,20 @@ resolve/substitution 阶段会被执行两次，一次是在解析 Componnet 依
 
   Attribute 作为 key.Attribute 指定的值类型的值作为值，存储在该容器中。
 
+- 常用的 Attribute 属性 key 值
+
+  - artifactType
+
+    可选类型为 jar,java-classes-directory 等。对应 ArtifactTypeDefinition 中定义的变量。
+
+  - org.gradle.libraryelements
+
+    可选类型为 jar,classes，resources 等。对应 LibraryElements 中定义的变量。
+
+  - org.gradle.usage
+
+    可选类型为 java-api,java-runtime，java-api-classes,java-api-jar.对应 Usage 接口中定义的类型。
+
 #### AttributesSchema
 
 通过 DependencyHandler#getAttributesSchema 可以获得该类型。用于设置 Attribute 匹配时的兼容类型。如：Consumer 依赖 api 但是 Producer 没有 api 属性。此时可以配置兼容策略，Producer 的 api 兼容于 runtime,因此可以用 runtime 代替 api 提供给 Consumer 使用。
@@ -567,7 +585,97 @@ JAVA 项目中的 Configuration 分类。
   java 项目中输入通常是原始的 jar 文件。
 
 - @InputArtifact
+  
+  只注入当前的直接依赖。
+
 - @InputArtifactDependencies
+
+  注入当前依赖的关联依赖。
+
+- @CacheableTransform
+
+  实现可以缓存的 TransformAction ，实现 TransformAction 的缓存机制。
+
+- InputChanges
+
+  实现增量的 TransformAction 依赖转换
+
+- @CompileClasspath
+
+## Publishing 配置
+
+publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository 任务的聚合任务。通过 Project#Artifacts 生成的 Artifact 可以配置进入 Configuration 被其他 Project 引用和消费。
+
+### Project#Artifacts
+
+  用于生成 Artifacts 向 Publication 中添加。同时会将该 Artifacts 保存进入 Configuration,便于其他项目引用和消费。
+
+### 主要插件
+
+- MavenPublishPlugin
+
+  maven 仓库 publish 组件。简称 maven-publish，声明插件的资源文件: org.gradle.maven-publish
+
+- IvyPublishPlugin
+
+  ivy 仓库 publish 组件。简称 ivy-publish , 声明插件的资源文件: org.gradle.ivy-publish
+
+- PublishingPlugin
+  
+  publish 共用的组件
+
+### PublishingExtension  配置
+
+使用 publishing 配置该 Extension
+
+- PublishingExtension#RepositoryHandler
+  
+  配置 publish 发布任务的仓库。
+
+- PublishingExtension#PublicationContainer
+
+  配置 publish 需要发布的构建
+
+- Publication
+  
+  待发布的构建，具体为 IvyPublication 和 MavenPublication 。
+  
+- IvyPublication
+- MavenPublication
+
+### Publish 任务
+
+ publis<publicatin_name>PublicationTo<Repo——Name>Repository 的任务是在 Project Evaluated 之后才创建的（或者说是执行前创建的，因此需要使用 TaskCollection#withType#configureEach 进行任务的配置操作。
+
+- PublishToMavenRepository/PublishToMavenLocal
+
+  具体执行 publish 到远程仓库和本地仓库的任务。可以通过创建 task 并且使用 Task#dependsOn 和  TaskCollection.withType 传递上述类型，进行 Task 过滤，实现publish 指定类型的聚合任务，如：只执行 publish 到 external 仓库的所有任务，从而实现 publish 任务的聚合。
+
+- PublishToIvyRepository
+
+  具体执行 publish 到远程仓库的任务。
+
+## 软件组建
+
+- Moudule
+
+  单个软件组件 如 java 中的 guava,gson 等第三方依赖jar
+
+- Platform
+
+  一系列软件组件组成的开发平台包。其内在包含版本的一致性与协调性。
+
+- SoftwareComponent
+
+  用于定义指定项目生成的便于发布的组件。如：JavaPlugin#registerSoftwareComponents 注册的 AdhocComponentWithVariants 组件。
+
+- Artifact (org.gradle.api.artifacts.PublishArtifact)
+
+  表示一系列的软件产出产品，可以放置 Configuration 中表示该软件的产出(由 ArtifactHandler 执行添加任务)，交由其他 Project 进行消费。也可以放置于 Publication 中交由 publish 进行发布。
+
+- Publication
+
+  由一系列的 Artifact 组成，用于发布的对象。Publication 有 maven,ivy 仓库不同导致产出的不同。
 
 ## Gradle 执行阶段
 
@@ -608,33 +716,57 @@ JAVA 项目中的 Configuration 分类。
 
 - JavaGradlePluginPlugin(org.gradle.java-gradle-plugin.properties,kotlin 简短名称:java-gradle-plugin)
   
-  gradle 插件项目依赖的 Plugin.依赖 JavaPlugin
+  gradle 插件项目依赖的 Plugin.依赖 JavaPlugin。自动导入 gradle api 库的依赖，提供了一些便捷的仓库发布配置.如：便捷的向 gradle plugin 中央仓库发布 plugin,生成 xxx.properties 插件索引属性。
+  引入了 GradlePluginDevelopmentExtension 用于给用户配置 Plugin,Test 源码文件的目录。通过 gradlePlugin{ plugins {barPlugin {id = "barid",implementationClass = "package.Implementation"}}}
 
 - JavaPlatformPlugin（org.gradle.java-platform.properties,kotlin 简短名称：java-platform
 
   用于 构建 maven 的 bom 文件，用于协调相同平台下不同依赖的版本一致性。不同库的版本对齐。
 
+- JavaLibraryDistributionPlugin(org.gradle.java-library-distribution.properties ,kotlin 简短名称:java-library-distribution )
+  
 - ApplicationPlugin(org.gradle.application.properties,kotlin 简短名称:application)
   
-  java 应用项目的plugin，提供 java 文件编译，lib jar 打包，zip,tar 并且生成java 应用的启动脚本。依赖 JavaPlugin，DistributionPlugin
+  引入了 JavaPlugin，DistributionPlugin 为其提供基础支持。
+  java 应用项目的plugin，提供 java 文件编译，依赖的第三方的 lib jar 打包，zip,tar 并且生成java 应用的启动脚本。依赖 JavaPlugin，DistributionPlugin。提供了一些脚本，依赖jar包的包含，方便使用者可以通过脚本等启动该程序。
+  通过 application 名称引入了 ApplicationPluginConvention 惯例配置。该惯例主要服务于 该插件提供的Task。如：run 需要执行的 mainClass,执行需要传递给 jvm 的参数等。
 
 - JavaLibraryPlugin(org.gradle.java-library.properties,kotlin 简短名称:java-library)
 
-  java-library 项目的 Plugin.依赖 JavaPlugin
-
-- JavaLibraryDistributionPlugin(org.gradle.java-library-distribution.properties ,kotlin 简短名称:java-library-distribution )
+  java-library 项目的 Plugin.依赖 JavaPlugin 基本没有添加额外的插件行为。没有添加 Convention
 
 - JavaPlugin (org.gradle.java.properties,kotlin 简短名称: java )
 
-[java Plugin Manual][https://docs.gradle.org/5.6.4/userguide/java_plugin.html#java_plugin]
+  [java Plugin Manual][https://docs.gradle.org/5.6.4/userguide/java_plugin.html#java_plugin]
+  java plugin 则使用了 JavaBasePlugin 的 java Convention 进行配置。
   
 - JavaBasePlugin (org.gradle.java-base.properties,,kotlin 简短名称: java-base )
+
+  通过 java 名称引入 JavaPluginConvention 。用于配置 java 的 SourceSet,SourceCompatibility,TargetCompatibility,DocDir,TestDir 等目录属性。
   
 - BasePlugin (org.gradle.base.properties,kotlin 简短名称: base )
+
+  通过 base 名称引入了 BasePluginConvention 配置。用于配置 打包完成的相对于 build 目录的 libs,dist 目录的名称，以及生成的 lib jar 的 ArchiveBaseName.
+
+- LifecycleBasePlugin （无 xxx.propperties,kotlin 简短名称：无)
   
+  提供 clean,assemble,check,build 等项目基础任务。
+
 - GroovyPlugin(org.gradle.groovy.properties,kotlin 简短名称: groovy )
   
 - GroovyBasePlugin(org.gradle.groovy-base.properties,kotlin 简短名称: groovy-base )
+
+### 聚合 Task
+
+- clean
+- assemble
+  assembleDebug,assemblePreDebug
+- check
+  test(运行测试用例)
+- build
+  jar
+- publish
+  publis<Publication_Name>PublicationTo<Repo_Name>Repository
 
 ### 常见 task
 
@@ -649,20 +781,90 @@ JAVA 项目中的 Configuration 分类。
 - buildDependents
 
   构建和测试当前项目以及依赖当前项目的项目
+- javaDoc
+
+  根据java代码中的注释生成 html 格式的java 文档。如果要根据 kotlin 代码中的注释生成文档则需要使用 dokka 工具才可以进行。
+  
+  生成javaDoc 文档根据注释
+
+### java 项目编译过程中的 task
+
+- JavaCompile
+  
+  在 JavaBasePlugin#configureSourceSetDefaults 方法中创建。
+
+- ProcessResources
+
+- Javadoc
+- Classes
+
+  名称为 classes 其实实际类型为 DefaultTask,用于聚合上述的 JavaCompile 和 ProcessResources 任务
+
+- Jar/War/Ear
+
+  Jar 在 JavaPlugin#configureArchivesAndComponent 中创建，依赖 SourceSet#output，用于压缩上述文件进入jar包。Jar 任务只执行压缩成jar包的操作，因此其既可以压缩 JavaCompile 任务生成的 class 文件，也可以压缩 Source 文件生成源码包。
+  War 则由 WarPlugin 进行创建。
+  Ear 则由 EarPlugin 进行创建。
+  War Ear 任务均继承自 Jar 任务。
+
+  jar 中可以设置 jar 包中的 MANIFEST.MF 属性值，通过 JavaPluginConvention 设置的属性无法直接应用于 jar 任务，仍然需要通过 jar 任务设置该属性，并且 Jar#setManifest(Manifest) 类提供属性合并的操作。(*Android 中的Manifest.xml的合并也基本同 jar 中的Manifest的合并操作*)
+
+  使用 application (JavaApplication) 设置的 mainClassName 对生成 jar 包中提供的 MANIFEST.MF 文件并不是有效。该处的 mainClassName 只对 run 任务起效果，run 时会把该 mainClassName 当作 class 进行运行。
+
+- Test
+
+  执行 gradle test 命令时执行该任务。用于执行 junit,TestNG 的测试任务。
+
+- JavaExec
+
+  执行 gradle run 命令时执行该任务。用于运行生成的 java 程序。
+
+- WriteProperties
+  
+  解决了 java.util.Properties 每次使用 Properties#store 均会生成时间戳更新文件的时间，导致增量构建无法生效的问题。WriteProperties主要在以下几个地方进行了生成文件的优化:
+
+  - comments 不添加时间戳
+  - 换行符号默认使用 \n (与系统无关)
+  - 属性值按照字母表顺序排序(避免了属性相同只是位置不同导致生成的文件不同的问题)
+
+### Java/JVM 项目中的惯例配置
+
+- JavaPluginConvention
 
 ## 自己项目中的 TODO 内容
 
 - 抽离 AARC 项目的共用配置,并且通过 Project#extra 配置 第三方插件的 lib 和 App 项目。
 - 尝试将 AARC 子项目的依赖关系配置抽取提出到一个共用的地方。
-  
+- 第三方组件项目当不是一个很大的单独项目时，不要使用目前的单独项目模式，可以使用单独的源码目录模式进行管理。
+- 引入 google error Prone,PMD,CodeCheck 等代码检查工具，用于检查不规范的写法。
+- 寻找 kotlin 的代码检测工具
+
 ## References
 
 - [Gradle Src][https://github.com/gradle/gradle]
 
 - [Gradle GetStart Guide][https://gradle.org/guides/]
 
-- [Gradle Doc][https://docs.gradle.org/5.6.4/userguide/] guide 中的用例处于 gradle 项目目录的 /subprojects/docs/src/samples/userguide 子目录下。
+  通过指导快速的配置 java,objectC,js,android，gradle plugin 等项目的gradle 构建配置。
+  [guides 示例项目地址][https://github.com/gradle/guides]
+
+- [Gradle Doc][https://docs.gradle.org/5.6.4/userguide/]
+  
+  guide 中的用例处于 gradle 项目目录的 /subprojects/docs/src/samples/userguide 子目录下。
+  展示 gradle 的基础构Api 使用，以及 gradle 构建框架的基础组件概念，gradle 构建框架的执行生命周期概念。
   
 - [Gradle Plugin][https://plugins.gradle.org/]
+
+  gradle 官方开发的插件发布和搜索平台。
   
 - [Gradle Api Doc][https://docs.gradle.org/5.6.4/javadoc/]
+
+  gradle public api 文档。
+  
+- [Gradle Dsl][https://docs.gradle.org/5.6.4/dsl/]
+  
+  Gradle 核心插件 DSL 配置索引
+  
+## gradle 设计准则
+
+- COC(Convention Over Configuration)
