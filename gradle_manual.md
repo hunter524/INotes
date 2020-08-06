@@ -216,7 +216,47 @@ Sync 任务继承自 Copy 任务其与 Copy 任务不同的是 Sync 会保持 de
 - finalizedBy ,当前任务执行结束之后才会执行其他任务.
 - 建立 Task 之间的依赖关系时指定的 Task 未必要已经被创建.(即可以先指定依赖,稍后再创建被依赖的Task,文档称其为惰性依赖)
 - defaultTasks 用于配置 gradle 命令不携带任何参数时需要执行的 Task 任务
+
+### DefaultTask
+
+  不携带如何附加属性的 gradle 默认实现的 Task.使用者实例化，继承该 Task 用于执行自己定义的具体的任务。
+
+### ConventionTask
+
+  提供一种惯例映射的 Task.
+
+### SourceTask
+
+  携带源码文件目录的 Task.如:JavaCompile,JavaDoc,GroovyCompile 等任务。这些任务需要处理源文件，因此可以继承该 Task 可以方便的进行源文件的处理和过滤。
+
+### Task 任务并发执行
+
+  目前 Gradle Task 中的任务执行通常是顺序的（可以配置 parelle=true 参数让 gradle 并行执行无依赖的相关任务）。但是 gralde 中的 TaskAction 执行均是顺序，单线程执行的。因此该处 gradle 提供的组件则是让 TaskAction 可以并行执行。
+
+- WorkParameters
+
+  并发执行任务的参数抽象。
+
+- WorkAction
+
+  并发执行任务的执行动作。
+
+- WorkerExecutor
+
+  并发执行任务的执行器，负责构建不同隔离模式（classLoader 隔离，进程隔离，不隔离）下的任务执行队列。
   
+  classLoader 隔离: 用于配置执行时使用不同的执行库版本。
+
+- WorkerSpec/ClassLoaderWorkerSpec/DefaultWorkerSpec/DefaultClassLoaderWorkerSpec/DefaultProcessWorkerSpec
+
+  在 WorkerExecutor 分别用于配置不同隔离类型的 WorkQueue。
+
+  DefaultClassLoaderWorkerSpec: 用于配置 classpath 进行 ClassLoader 的隔离配置。
+
+- WorkQueue
+
+  提交的任务队列。Task 使用该队列向其中提交可以并行执行的执行单元（WorkAction). WorkQueue#await 可以等待所有的提交的任务执行结束。
+
 ## 文件操作
 
 FileTree 与 FileCollection 是 gradle 文件操作 API 的核心。java 编译中的 SouceSet 数据抽象则持有待编译文件，资源文件，编译完成的文件的 FileCollection.
@@ -762,11 +802,14 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 - assemble
   assembleDebug,assemblePreDebug
 - check
-  test(运行测试用例)
+  test(运行测试用例)，gradle 只提供运行测试任务不提供具体测试框架实现。目前主流的 Java 单元测试框架为 junit4,testNG,Spock 等，Gradle 团队目前推荐使用 Spock，目前 Gradle 团队在 Plugin Test Sample 的项目中也是使用该插件进行的测试代码编写。
+
+  使用 TestKit 插件和 Gradle TestKit 组件提供的 GradleRunner 功能可以对编写的 gradle 插件执行功能测试功能。
+  
 - build
   jar
 - publish
-  publis<Publication_Name>PublicationTo<Repo_Name>Repository
+  publish<Publication_Name>PublicationTo<Repo_Name>Repository
 
 ### 常见 task
 
