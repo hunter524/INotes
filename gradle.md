@@ -546,6 +546,79 @@ TODO:://功能和目的
 
 - TaskExecutionPreparer
 
+### Gralde 中的对象创建机制
+
+- ObjectFactory
+  
+  创建对象时执行注入参数的功能。被注入的可以是该被创建对象的 getter方法，共有构造方法。但是参数需要被 @javax.inject.Inject 注解标记。
+
+  内置提供用于创建 NamedDomainObjectContainer,DomainObjectSet,ConfigurableFileCollection,RegularFileProperty,ListProperty\<T\>,MapProperty<K, V>,Property\<T\>,SourceDirectorySet,named 方法创建继承自 Named 的指定名称的对象，newInstance 创建指定类型的对象，并且注入相应的参数。
+
+  其中的 Property 相关的对象，用于持有对应的类型对象，用于实现按需加载/创建指定应该持有的对象的功能。
+
+  主要实现类为 DefaultObjectFactory 和 InstantiatorBackedObjectFactory
+
+- ProviderFactory
+
+  负责创建 Provider\<T> ,Provider\<T> 可以通过 @Inject 注入的方式创建，也可以通过 Project#getProviders 获得 ProviderFactory 然后手动创建该对象。
+
+- Instantiator
+
+  对象创建器，依赖于下述的 ServiceRegistry 和 ServiceLookup 查找创建对象的依赖和创建指定类型的对象。
+
+### Property/Provider 对象应用
+
+- Provider\<T>
+  
+  类似于 google gauva 中的 Optional 对象，用于持有对象，惰性创建对象，延迟创建对象，创建对象在需要时。该处只提供 get 相关方法和 map,flatMap 相关的转换方法，不提供任何设置相关的方法。
+
+- Property\<T>
+
+  Property 则继承自 Provider 提供了上述的 Provide 未提供的一些各具特点的set方法,用于 set Property 属性的值。并且在 gradle 5.0 之后提供了更多的设置值的方法，并且提供锁定值的方法。
+  *当前及下述四种 Property 均需要通过 ObjectFactroy#xxProperty 方法进行创建*
+
+- ListProperty
+
+  Provider 返回的对象为 List\<T>
+
+- SetProperty
+
+  Provider 返回的对象为 Set\<T>。ListProperty,SetProperty 均实现了可以通过迭代器进行初始化的方法。
+
+- MapProperty
+
+  Provider 返回的对象为 Map\<K,V>.MapProperty 则只实现了通过 Map 进行初始化的方法。提供了便捷的方法，可以获取当前 Map 中的所有的 key 的集合，但是没有提供获取 value 集合的方法。
+
+- DirectoryProperty
+
+  Provider 返回的对象为 Directory。通过 DirectoryProperty#getAsFileTree 可以获取当前 Directroy 目录下的所有的文件和目录集合。
+
+- RegularFileProperty
+  
+  Provider 返回的对象为RegularFile. 上述 RegularFile 与 Directory 均为 FileSystemLocation。前者表示文件，后者表示目录。
+
+- ConfigurableFileCollection
+  
+  可以被配置的文件集合，存储文件集合与创建这些文件集合相关的 Task 之间的关系。
+
+### gradle 可以被注入 Task,Project 等的通用服务
+
+- ObjectFactroy
+  
+  如上述所述，用于创建 Property 等对象。
+
+- ProjectLayout
+
+  可以通过标记 @Inject 注入 Task,Plugin 等对象，也可以通过 Project#getLayout 获得该对象。该类的中的与 DirectoryProperty,ConfigurableFileCollection,Provider,RegularFileProperty 相关的方法均被废弃，被ObjectFactory 相关的方法替代。目前主要提供三个方法，通过目录创建 FileCollection 对象，获得 build 目录和当前 project 目录。
+
+- ProviderFactory
+  
+  用于创建 Provider 对象。
+
+- WorkerExecutor
+
+  用于 Task 并行的执行相关的任务。
+
 ### Gradle 中的服务注册/发现机制(ServiceRegistry)/Instantiator
 
   在 Gradle 的项目构建源码中很多地方依赖于下面所描述的 createXXX,configureXXXX,decorateXXX 的服务发现机制。可以认为这是gradle项目内置构建的一种依赖注入系统。
@@ -772,9 +845,93 @@ TODO:://功能和目的
 
 #### Project#Artifacts(ArtifactHandler)
 
-#### NamedDomainObjectContainer
+#### NamedDomainObjectContainer/NamedDomainObjectSet/NamedDomainObjectCollection/DomainObjectCollection
 
-为上述 Task(TaskContainer),Configuration(ConfigurationContainer),SourceSet(SourceSetContainer)提供容器和便捷的创建相关容器内部放置的对象的操作。
+为上述 Task(TaskContainer),Configuration(ConfigurationContainer),SourceSet(SourceSetContainer)等提供容器，并且可以根据添加的规则，向容器内部动态的添加 Rule 规则，使使用者在获得指定对象时根据 Rule 规则动态的创建需要获取的对象。(即延迟创建，创建该对象的时机为在需要获取该对象时)
+
+##### 领域容器的接口抽象
+
+领域容器用于存放一组领域对象，如:Task,SourceSet,Configuration,ArtifactRepository 等等均有其自己的存放容器。分别为
+DefaultTaskContainer,DefaultSourceSetContainer,DefaultConfigurationContainer,DefaultArtifactRepositoryContainer．
+
+- PolymorphicDomainObjectContainer
+
+  与 NamedDomainObjectContainer 的区别是其支持创建多种不同类型的 DomainObject 放入其中。只需要其具有相同的父类即可。如其接口实现类：DefaultTaskContainer　该容器只要求放入其中的对象为　Task 子类即可．其同 NamedDomainObjectContainer 相同提供即时创建，按需创建的方法。但是其额外提供了获取指定类型的 NamedDomainObjectContainer 的方法用于过滤获得该类型的 NamedDomainObjectContainer.
+
+  该接口的默认实现类为：DefaultPolymorphicDomainObjectContainer
+  
+- NamedDomainObjectContainer
+
+  提供即时创建的方法(即：create如果创建的对象已经存在则抛出异常,maybeCreate如果查找不到即创建)和按需创建(即：register)的方法。
+
+- NamedDomainObjectSet
+
+  提供 Set 的访问方式访问 NamedDomainObjectCollection 并且其中的元素是按照其名称有序排列的。
+  提供了 NamedDomainObjectSet#withType，matching，findAll 等过滤指定元素获得 live NamedDomainObjectSet 的默认实现。
+
+  DefaultNamedDomainObjectSet 为其默认实现。
+
+- NamedDomainObjectList
+
+  实现了 List 接口，与普通 List 的区别是普通 List 通过判断 Object#equals 是否需要移除指定对象。该　List 则是通过名称是否相同判断是否需要移除指定对象．
+
+- NamedDomainObjectCollection
+
+  提供命名的对象容器。容器需要符合：
+  - 两个不同名字的对象，Object#equals 不能相同。
+  - 所有在该集合中的容器必须拥有不同的名字。添加重名对象会返回失败，或者抛出异常。
+  
+  DefaultNamedDomainObjectCollection 为其默认实现。
+
+  主要添加以下便捷的容器操作：
+
+  - 添加 Rule 按需创建对象支持
+
+  附属工具类：
+
+  - Named
+
+    带有名字的对象实现该接口。
+
+  - Namer
+
+    没有实现 Named 接口的对象通过 Namer 获得一个名字提供给 NamedDomainObjectCollection 使用。
+
+    DynamicPropertyNamer:动态获取对象的 name 属性，如果对象继承自 Named 接口则使用 Named#getName, Map 则获取 name key 值对应的 value 值。其他对象则获取 name 名称的属性字段值（包装成为 BeanDynamicObject 使用反射获取该对象的 name 属性值)。
+
+  - NamedDomainObjectCollectionSchema/NamedDomainObjectSchema
+
+    NamedDomainObjectCollection#getCollectionSchema 获得当前集合中每个命名对象对应的模式。(即：每个命名对象所对应的公开类型)，会被子类重写提供自己的模式。否则当前集合则为同一个模式。
+
+- DomainObjectCollection
+  
+  提供集合动态过滤子集合，动态配置的扩展。实现了 Collection 集合子类。
+
+  DefaultDomainObjectCollection 为其默认实现。
+
+  DomainObjectCollection#all: 配置容器内部已有的对象，并且在新对象添加到容器内部之后进行配置。
+
+  DomainObjectCollection#configureEach:在某个对象被请求时进行配置。
+
+  同时提供一些常用的集合过滤方法，过滤返回的集合为动态集合(即:源集合中的数据发生改变时，过滤产生的集合中的数据也会产生相应的改变)
+
+  附属工具类：
+
+   其中 CollectionEventRegister，ElementSource 为 DefaultDomainObjectCollection  DefaultDomainObjectCollection 通过持有两者的实例实现对象的添加，添加，删除事件的下发。
+
+  - ElementSource/PendingSource/WithEstimatedSize/WithMutationGuard
+
+    DefaultNamedDomainObjectCollection 中真实容纳被添加对象的场所
+
+  - CollectionEventRegister
+
+    负责管理，注册，下发 NamedDomainObjectCollection 中的添加，删除事件。
+
+  - MutationGuard
+
+    更改守护器，判断当前该集合是否能进行指定类型的修改操作。
+
+##### 命名领域容器的具体使用
 
 - TaskContainer
   
@@ -868,6 +1025,8 @@ TODO:://功能和目的
   可以用于表示一组 dependencies ,classpath, src files 。同时可以与 Task 任务相关联用于跟踪这一组任务是由那个 Task 产生的，或者是要交由哪个 Task 进行消费的。AbstractFileCollection 为该接口的主要实现基类。
   TODO://该处的 FileCollection 为 Task 构建任务和相关文件的重点
 
+  FileCollection 是不可修改的 flat 的文件数据结构表示。FileCollection 对应的可以修改的文件数据结构表示为 ConfigurableFileCollection。
+
   *FileCollection 设计成可以实时反映文件变化的，如 FileCollection#filter 之后产生的 FileCollection 如果系统文件改变了，也会反映到当前 FileCollection 迭代产生的 List\<File\> 上面以及后面 filter 产生的 FileCollection。即 FileCollection 不是创建之后就不再改变的，而是可以实时反映文件目录变化的*
 
   *与 FileTree 不同的是该组文件不需要有任何相关连的关系，FileTree 包含的文件则要求有共同的父文件*
@@ -909,6 +1068,8 @@ TODO:://功能和目的
 - FileTree
 
    该接口实现了 FileCollection 接口，用于描述文件系统的文件树结构。并且提供了一些文件操作方法。(其实并没有什么太大用处),通常用于表示一组等待复制的文件，或者zip,tar 等归档文件或者压缩文件。
+
+   FileTree 为不可以修改的带有文件层级关系的数据结构表示，其所表示的文件要求拥有一个共同的父目录。其可以修改的表示则为 ConfigurableFileTree 其主要通过继承的 PatternFilterable 通过 include,exclude 方法进行指定文件的包含和去除。
 
 - MinimalFileCollection
 
