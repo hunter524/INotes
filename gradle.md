@@ -568,9 +568,19 @@ TODO:://功能和目的
 
 ### Property/Provider 对象应用
 
+  下述除 ConfigurableFileCollection 外均实现了 Property/Provider/.Property 表示的是可以被更改的属性，Provider 表示的是不可以更改的属性。下属 Property 子类均提供了 convention 方法，其语义为当 Property 没有设置其他任何值时按照该惯例，该属性使用该值提供给使用者。
+
+  下述 Property 的实现均实现了 HasConfigurableValue 接口，其 finalizeValue，disallowChanges 方法可以实现保证调用这些方法之后Property 包含的值不可以再被修改。
+
+  其中的 FileCollection,FileTree,ConfigurableFileCollection,ConfigurableFileTree 也被认为是 Provider/Property 的一种变形。ProviderFactory,ObjectFactory 分别为构建 Provider,Property 的工厂，其可以通过 @Inject 进行注入，也可以通过 Project#providers,Project#objects 进行获取操作。
+
 - Provider\<T>
   
   类似于 google gauva 中的 Optional 对象，用于持有对象，惰性创建对象，延迟创建对象，创建对象在需要时。该处只提供 get 相关方法和 map,flatMap 相关的转换方法，不提供任何设置相关的方法。
+
+- NamedDomainObjectProvider/TaskProvider
+
+  带有名字的 Provider，向外提供指定命名对象或者 Task。
 
 - Property\<T>
 
@@ -579,11 +589,11 @@ TODO:://功能和目的
 
 - ListProperty
 
-  Provider 返回的对象为 List\<T>
+  Provider 返回的对象为 List\<T>.其实现类为 DefaultListProperty,实现了 HasMultipleValues 用于向该 ListProperty 内部添加元素。
 
 - SetProperty
 
-  Provider 返回的对象为 Set\<T>。ListProperty,SetProperty 均实现了可以通过迭代器进行初始化的方法。
+  Provider 返回的对象为 Set\<T>。ListProperty,SetProperty 均实现了可以通过迭代器进行初始化的方法。并且都实现了 HasMultipleValues 接口用于向 SetProperty 添加元素的方法。
 
 - MapProperty
 
@@ -599,7 +609,7 @@ TODO:://功能和目的
 
 - ConfigurableFileCollection
   
-  可以被配置的文件集合，存储文件集合与创建这些文件集合相关的 Task 之间的关系。
+  可以被配置的文件集合，存储文件集合与创建这些文件集合相关的 Task 之间的关系。上述Property 的实现类及当前类均实现　HasConfigurableValue　用于进行值的生命周期的管理.
 
 ### gradle 可以被注入 Task,Project 等的通用服务
 
@@ -934,6 +944,8 @@ DefaultTaskContainer,DefaultSourceSetContainer,DefaultConfigurationContainer,Def
 ##### 命名领域容器的具体使用
 
 - TaskContainer
+
+  推荐使用 register 方法而不是 create 方法。create 方法会进行立即创建，register 方法只是注册 Task 的创建方式，只有在 Task 真正需要时才会执行创建操作。
   
 - ConfigurationContainer
   
