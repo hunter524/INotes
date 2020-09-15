@@ -824,6 +824,7 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 - buildDependents
 
   构建和测试当前项目以及依赖当前项目的项目
+  
 - javaDoc
 
   根据java代码中的注释生成 html 格式的java 文档。如果要根据 kotlin 代码中的注释生成文档则需要使用 dokka 工具才可以进行。
@@ -834,7 +835,10 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 
 - JavaCompile
   
-  在 JavaBasePlugin#configureSourceSetDefaults 方法中创建。
+  在 JavaBasePlugin#configureSourceSetDefaults 方法中创建。可以通过该 Task 的 CompileOptions 对 java 文件的编译过程进行编译参数的配置。
+
+  TODO:// 需要理解 DslObject 以及属性代理的使用。
+  TODO:// 自己写一个 APT 插件进行生成代码操作。
 
 - ProcessResources
 
