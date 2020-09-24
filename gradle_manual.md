@@ -525,13 +525,13 @@ resolve/substitution 阶段会被执行两次，一次是在解析 Componnet 依
 
 该方法返回的为 AttributeContainer 为 Configruation 添加额外的属性。通常是为 Consumer 和 Produce 做额外的变种匹配工作。
 
-- Attribute
+- Attribute\<T>
   
-  指定 Attribute 属性的key值，并且指定 Atrribute 属性对应的值的类型。Attribute 为 AttributeContainer 中的 key.
+  指定 Attribute 属性的key值，并且指定 Atrribute 属性对应的值的类型。Attribute 为 AttributeContainer 中的 key. T 为 Attribute 中值的类型。
 
 - AttributeContainer
 
-  Attribute 作为 key.Attribute 指定的值类型的值作为值，存储在该容器中。
+  Attribute 作为 key.Attribute 指定的 T 类型为值的类型，存储在该容器中。
 
 - 常用的 Attribute 属性 key 值
 
@@ -546,6 +546,13 @@ resolve/substitution 阶段会被执行两次，一次是在解析 Componnet 依
   - org.gradle.usage
 
     可选类型为 java-api,java-runtime，java-api-classes,java-api-jar.对应 Usage 接口中定义的类型。
+
+#### Named
+
+带有名称的对象需要实现该接口，可以用于获取对象的名称，也可以用于标记上述所述 Atrribute 的值。如果某个对象没有实现 Named 接口但是又需要获得名称则需要通过起名器 Namer 对对象进行起名操作。
+
+如：Task 则是通过 Task#Namer 进行的取名操作。
+如：LibraryElements,Usage,Bundling 则用于表示特定 Atrribute 的状态值。这些值是后面新添加，分别用于表示 Library的元素类型，Configuration 的使用类型，对外部的依赖类型 用于提升编译效率和灵活性。
 
 #### AttributesSchema
 

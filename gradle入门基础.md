@@ -21,7 +21,44 @@ maven: netty,apache 自家项目
 
 implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的默认 jar 任务只会打包当前项目的代码进入jar,而不会将依赖的项目打包进入jar,但是如果使用 assmbleDist,installDist,distTar,distZip 任务，运行时的依赖jar会和项目生成的jar 共同加入生成的zip文件中,并且生成运行脚本，提供给用户直接通过脚本运行jar程序。如果需要将依赖的jar文件通过jar任务打包进入同一个jar文件包中则需要配置 fatJar 任务，即将 runtimeClasspath 配置中依赖的jar包解压，提供给 Jar 任务重新压缩进入新生成jar包中。
 
-依赖种类
+依赖种类：
+
+- implementation
+  
+  依赖不向外泄漏，优先考虑使用该种依赖方式。(*在 JavaLibraryPlugin 中使 implementation 依赖继承了 api 依赖*)
+
+- api
+
+  依赖直接向外暴露的依赖。(*在 JavaLibraryPlugin 中使 api 依赖继承了 compile 依赖*) api 的配置是在 JavaLibraryPlugin 中添加的。
+
+- compile(Deprecated)
+
+  老的不区分 api,implementation 的依赖方式。现在已经被废弃。
+
+- compileOnly/provided(deprecated 等同于 compileOnly)
+  
+  只用于编译时的依赖满足和检查。不会出现在生成的zip,tar,distribution 等安装包目录中。程序需要正常运行通常需要用户额外提供与 compileOnly 的依赖具有相同的 ABI 的其他实现。
+
+- runtimeOnly/runtime(deprecated 等同于 runtimeOnly)
+  
+  运行时的依赖，不参与编译的依赖检查。
+
+- compileClassPath(内部聚合依赖)
+
+  聚合了 compile compileOnly implementation api 三种依赖方式。代表编译时需要提供的 class 的路径。
+
+- runtimeClassPath (内部聚合依赖)
+
+  聚合了 compile implementation api runtime runtimeOnly。代表运行时所需要提供的类的路径。
+
+- apiElements (内部定义的依赖)
+
+  用于定义向依赖者暴露的当前项目内部的元素，用于编译时的依赖检查（源码的正常引用跳转)。继承自 api 依赖，同时也提供当前项目的源码依赖.
+
+- runtimeElements（内部定义的依赖）
+
+  用于定义向依赖者暴露的当前项目内部的元素，暴露的这些元素只用于项目的运行时提供。继承自 implementation,runtimeOnly,runtime.default 默认配置继承自 runtimeElements.
+
 依赖解析策略：依赖替换，平台依赖，依赖版本，依赖限制
 依赖缓存
 依赖策略：编译时依赖（compileOnly)，运行时依赖(runtimeOnly),编译时和运行时共同依赖（implementation,api)
@@ -99,6 +136,28 @@ COC (Convention Over Configuration),Project,Task 等继承自 ExtensionAware 都
 
 plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *常见Plugin* 章节
 
+##### 基础配置选项和名称
+
+- base
+  
+  由 BasePlugin 提供的，对外暴露的实现类为 BasePluginConvention，提供基础的 dists,libs,archivebaseName 的配置。
+
+- java/sourcesets
+
+  均由 JavaBasePlugin 提供。对外暴露的实现分别为 JavaPluginExtension,SourceSetContainer 前者用于配置 source/target 的 Compatibility.后者用于获得和创建 SourceSet,并且对获得的 SourceSet 进行配置。对于 SourceSet 的配置主要是获取 SourceSet 的 output 输出，对SourceSet#java(SourceDirectorySet) 添加，设置，过滤 java 源码目录用于编译。
+
+  插件默认创建的 SourceSet 为 main 和 test.
+
+- application
+
+  由 ApplicationPlugin 提供。对外暴露的实现为 JavaApplication。用于配置 run 任务需要的 mainClass,java 命令的指定目录,java 运行该 main Class 携带的参数（main 方法入参），该应用的名称 。
+
+- manifest 配置
+
+  上述 java 的 JavaPluginConvention 也提供了 manifest 方法，使用该方法是只会创建 manifest 对象供后续使用。
+
+  如果需要将 manifest 写入 jar 包中则需要使用 Jar 任务对象中的 manifest 方法。*声明的manifest会存储在 jar 的 META-INF/MANIFEST.MF 文件中*
+
 ##### 基础Java Plugin
 
 - JavaPlugin
@@ -121,11 +180,13 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
   buildConfigName:构建指定 configuration 中配置的 artifact 产品
   uploadConfigName:构建并上传指定 Configuration 中配置的 Artifact 产品。
 
-  主要提供 compileJava（JavaCompile）,processResources（Copy),classes(聚合任务,依赖于前面连个任务),compileTestJav（JavaCompile）,processTestResources(Copy),testClasses,jar（Jar 任务依赖于 classes 任务主要用于输出 jar 文件）javadoc(JavaDoc,依赖于 classes 任务，生成javadoc 文档)，test(Test,依赖 testClasses 任务，通过Junit,TestNG 执行单测试)，uploadArchives（Upload，上传 archives 配置的 Artifact 进入指定的 Repository),clean(Delete 任务，删除build 目录下的文件)，*cleanTaskName(删除指定task名称的输出文件，如 cleanJar,则是删除 jar 任务的输出文件 jar包)
+  主要提供 compileJava（JavaCompile）,processResources（Copy),classes(聚合任务,依赖于前面两个任务),compileTestJava（JavaCompile）,processTestResources(Copy),testClasses,jar（Jar 任务依赖于 classes 任务主要用于输出 jar 文件）javadoc(JavaDoc,依赖于 classes 任务，生成javadoc 文档)，test(Test,依赖 testClasses 任务，通过Junit,TestNG 执行单测试)，uploadArchives（Upload，上传 archives 配置的 Artifact 进入指定的 Repository),clean(Delete 任务，删除build 目录下的文件)，*cleanTaskName(删除指定task名称的输出文件，如 cleanJar,则是删除 jar 任务的输出文件 jar包)
 
   对于一个Project 有不同的 SourceSet，可以分别使用 compileSourceSetJava，processSourceSetResources，SourceSetClasses 用于分别编译资源文件，java 文件或者一起编译资源文件java文件。(不同 SourceSet 的命名规则，除 main 之外，采用 动词:compile,process sourceSet 名称，任务处理文件类型的方式进行命名 )
 
   通过 java 扩展名称添加了 JavaPluginConvention ，通过 sourceSets 扩展名称添加了 SourceSetContainer 配置该插件可以配置的属性，如：添加SourceSet,修改 SourceCompatibility 和 TargetCompatibility 等。
+
+  TODO://ConventionMapping 在该插件 configureSourceSetDefaults 中的使用。
 
 - ReportingBasePlugin
 
@@ -137,7 +198,7 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 
   添加创建 buildTaskName 名称的 Task 规则（即向 Project 的 TaskContainer 添加 BuildConfigurationRule 规则,用于构建指定的 Configuration)。uploadxxx 对应 UploadRule 规则(用于使用 Upload 类型的 Task 上传指定的 Configuration)。
 
-  提供了原始的名称为 uploadArchives 类型为 Upload 的上传任务。(*目前该Task 只提供上传 ivy 仓库的功能，上传 maven 仓库的功能由 MavenPlugin 插件替代*)
+  提供了原始的名称为 uploadArchives 类型为 Upload 的上传任务。(*目前该Task 只提供上传 ivy 仓库的功能，上传 maven 仓库的功能由 MavenPlugin/MavenPublishPlugin 插件替代*)
 
   配置 AbstractArchiveTask 及其子 Task 主要是 Jar,Tar,War,Zip,Ear 类型任务的输出目录，Version,输出文件的 BaseName，Jar 任务的输出目录默认为 /build/libs 其他任务的输出目录默认为 /build/dist.
 
@@ -156,12 +217,17 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 - JavaLibraryPlugin
 
   向下依赖与基础的 JavaPlugin. api 类型的依赖的 Configuration 是在该处进行添加的。
+  使用该插件后，编译的依赖就会变成 build 目录下生成的 class 文件而不是 jar 文件，因此会增加编译时的内存消耗，尤其是在windows 平台上由于文件句柄的限制，尤其会降低编译时的性能，因此官方在介绍该插件时推荐在 windows 平台设置 org.gradle.java.compile-classpath-packaging 属性为 true 从而降低这种编译时的性能影响。
   
 - JavaLibraryDistributionPlugin
   
 - JavaPlatformPlugin
   
-  gradle 5.2 添加的新特性，用于生成 Maven 的 BOM（Bill of Material) 文件。
+  gradle 5.2 添加的新特性，用于生成 Maven 的 BOM（Bill of Material) 文件，或者是 Gradle platforms 文件（Gradle Metadata）。多个不同的 java library 项目，可能会构成一个java 开发平台，在同一个java 开发平台中，这些项目之间的版本有着一系列的协调和约束，因此便通过该插件完成平台的声明和版本约束。
+
+  Boms 项目：com.fasterxml.jackson:jackson-bom,org.springframework.boot:spring-boot-dependencies
+
+  提供 api 和 runtime 两种依赖模式，通过 DependencyHandler#constraint 中的 DependencyConstraintHandler 声明依赖的约束模式。通常不可以在 java-platform 中产生和依赖二进制文件（jar,也不能同时依赖 java-platform 和 java 或者 java-library 插件。) 如果需要依赖二进制文件则需要通过 javaPlatform#allowDependencies 显示的声明可以依赖二进制文件。
 
 - ApplicationPlugin
 
@@ -190,3 +256,13 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 ### buildSrc 项目
 
 ### Plugin 插件项目
+
+## 构建的核心
+
+### Configuration
+
+表示一组产品和产品的依赖。api,implementation,runtimeOnly 配置的依赖则是添加到与之对应名称的Configuration#getDependencies 中。其中也通过 Configuration#getAllArtifacts 配置一组当前 Configuration 的产出产品。
+
+在 BasePlugin 中除了上述依赖类型的 Configuration 还会默认创建 archives,default 这两个 Configuration。
+
+### Upload(Task)
