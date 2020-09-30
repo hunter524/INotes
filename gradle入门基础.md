@@ -115,6 +115,47 @@ implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的�
   
 - task 延迟创建 create -> register,getByName -> named (gradle 4.9 以上才可以使用，提升 Configuration 时的性能)
 
+### sourceSets/SourceSet
+
+默认的 SourceSet 为 main 和 test 分别放置项目的主代码与测试代码，用户可以通过 sourceSets 属性配置自己的 SourceSet。不同的 SourceSet 的依赖于编译任务是相互隔离。默认的 jar 任务只输出 main 下的 class 文件打包生成 jar文件。
+
+SourceSet 向上承接了与 Configuration 的依赖，向下定义了不同 compile,jar,classes 任务与 SourceSet 的依赖。SourceSet 内部分外 java,allJava,resource,allResource 不同的 SourceDirectorySet 可以分别独立包含不同的目录进入相同 SourceSet。（该处需要注意 srcDir/setSrcDirs 的区别）
+
+打包其他名称的 SourceSet:
+
+```java
+tasks.register<Jar>("jarJust"){
+    this.from(sourceSets.getByName("just").output)
+}
+```
+
+将其他名称的 SourceSet 添加进入默认的jar 任务：
+
+```java
+tasks.getByName("jar"){
+    (this as Jar).from(sourceSets.getByName("just").output)
+}
+```
+
+fatJar 将当前main的运行时依赖也打包进入同一个 jar:
+
+```java
+tasks.register<Jar>("fatJar") {
+
+    manifest {
+        attributes("Main-Class" to "com.github.hunter524.forlove.AppKt")
+    }
+
+    archiveClassifier.set("fat")
+
+    from(sourceSets.main.get().output)
+    dependsOn(configurations.runtimeClasspath)
+    from({
+        configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }
+    })
+}
+```
+
 ### Configuration/ConfigurationContainer
 
 ### Convention/ExtensionContainer
@@ -186,8 +227,6 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 
   通过 java 扩展名称添加了 JavaPluginConvention ，通过 sourceSets 扩展名称添加了 SourceSetContainer 配置该插件可以配置的属性，如：添加SourceSet,修改 SourceCompatibility 和 TargetCompatibility 等。
 
-  TODO://ConventionMapping 在该插件 configureSourceSetDefaults 中的使用。
-
 - ReportingBasePlugin
 
   为 Test,scan 等性能监控任务，测试任务提供基础的目录配置功能。该基础插件目前只向 Project 添加了名称为 reporting 类型为 ReportingExtension 的扩展。
@@ -202,7 +241,7 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 
   配置 AbstractArchiveTask 及其子 Task 主要是 Jar,Tar,War,Zip,Ear 类型任务的输出目录，Version,输出文件的 BaseName，Jar 任务的输出目录默认为 /build/libs 其他任务的输出目录默认为 /build/dist.
 
-  该插件还会默认创建：archives，default 名称的默认的 Configuration，同时也会创建名称为 defaultArtifacts 的 DefaultArtifactPublicationSet（*该容器主要容纳Configuration 中的 PublishArtifact*)。TODO:// 分别在项目中承担什么职责。
+  该插件还会默认创建：archives，default 名称的 Configuration。以及名称为 defaultArtifacts 的DefaultArtifactPublicationSet 将其放置在 Project#extensions 中。（*该容器主要容纳Configuration(不包含名称为 archives 的配置) 中的 PublishArtifact,因为该 DefaultArtifactPublicationSet 是依赖 archives 名称的Configuration 中的 PublishArtifactSet 所创建的，因此本质上是将所有Configuration 中的 PublishArtifact 集成进入同一个 PublishArtifactSet 中*)。
 
   配置 LifecycleBasePlugin 创建的 assemble 任务，使其依赖于 名称为 archives 的 Configuration 的 PublishArtifactSet 依赖的 Task.
 
@@ -239,6 +278,10 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 
   提供了 DistributionContainer 给使用者进行配置 Distribution。
 
+- Kotlin 语言编译插件
+
+由 Kotlin 语言开发者 JetBrains 自己编写的 [gradle 插件][https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm] 提供kotlin 语言的支持。但是 gradle 自己编写了 scala,groovy 语言的编译插件。
+
 #### 组件发布插件
 
 - PublishingPlugin
@@ -246,6 +289,12 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 - MavenPublishPlugin
 
 - IvyPublishPlugin
+
+#### 插件项目插件
+
+－ JavaGradlePluginPlugin
+
+ 依赖于　JavaPlugin 通常在　buildSrc 项目或者插件项目中应用．其默认引入　gradleApi 引用（便于插件的编写）．并且提供了名称为　gradlePlugin　类型为　GradlePluginDevelopmentExtension　的配置文件．该配置便于了生成xxxx.properties 并且内置　implementation-class 为其实现类.(如当前插件声明文件：org.gradle.java-gradle-plugin.properties，内容为：implementation-class=org.gradle.plugin.devel.plugins.JavaGradlePluginPlugin　指明当前插件ｉd和实现类路径，放置于　resoureces/META-INF/gradle-plugins/　目录下)
 
 ## 从 maven 向 gralde 转换
 
@@ -266,3 +315,25 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 在 BasePlugin 中除了上述依赖类型的 Configuration 还会默认创建 archives,default 这两个 Configuration。
 
 ### Upload(Task)
+
+只负责上传任务的配置。（配置上传到哪几个 maven,哪几个 ivy 仓库。需要上传哪个 configuration 中的内容）。真实的上传任务交由 ArtifactPublisher 去进行。其再通过识别不同的仓库再交由不同的仓库类型实现的 ModuleVersionPublisher 进行最终的上传任务。
+
+通过 RepositoryHandler 创建的每一个 maven,ivy 仓库均具有上传组件的功能。
+
+### JavaCompile/CompileOption/JavaToolChain/Compiler
+
+对 javac 命令的抽象，用于执行 javac 任务，并且配置执行 javac 任务时需要携带的选项参数。javac 命令的执行模式又分为:直接 fork 模式，java home 模式，当前进程直接执行模式。(*由于fork是计算机基础的程序复制工具,复制出来的程序与原程序配置相同,因此fork java 程序时会执行严格的参数检查,同时符合要求才进行fork操作,如果不符合要求则新建程序*)
+
+JavaToolChain 则是对于当前构建编译工具的行为的抽象。
+
+JvmVersionDetector：通过当前提供的 java 命令 或者 javahome目录,javadoc,java 等二进制执行，tools.jar 目录（JavaInfo）去探测当前的java版本，或者指定的 java 版本。
+
+Compiler:为对应执行编译功能的抽象,在 JavaCompile 的编译执行过程中主要涉及 AnnotationProcessorDiscoveringCompiler->NormalizingJavaCompiler->(CommandLineJavaCompiler,DaemonJavaCompiler,JdkJavaCompiler) 逐层嵌套,分别执行 APT class 文件发现,规范化数据打印,最终交由底层jdk 编译工具进行编译操作.
+
+CommandLineJavaCompiler:
+DaemonJavaCompiler:
+JdkJavaCompiler:0
+
+### ExecHandleFactory/ExecHandleBuilder
+
+构建过程中需要执行大量的命令行.如:javac,java,gcc 等命令.因此该处对 java 原始的命令行执行机制进行了封装(ProcessBuilder/Process).

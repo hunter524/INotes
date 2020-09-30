@@ -283,7 +283,7 @@ TODO:// 集合中的 Spliterators，Collector，Supplier 的使用。
 
 ### guava 扩展的集合
 
-对于JDK 中提供的集合从并发安全上主要分为线程安全的集合和线程不安全的集合，通常线程安全的集合为了减少线程阻塞，通常会设计一些巧妙但是十分复杂的算法避免线程不安全（COW,局部锁，CAS 清理算法)
+对于JDK 中提供的集合从并发安全上主要分为线程安全的集合和线程不安全的集合，通常线程安全的集合为了减少线程阻塞，通常会设计一些巧妙但是十分复杂的非阻塞算法（COW,局部锁，CAS 清理算法)
 
 从功能上分为：
 
@@ -327,3 +327,102 @@ Queue:
 [apache 实现的集合类][https://commons.apache.org/proper/commons-collections/]
 
 #### MultiSet
+
+没有继承自 JDK Set 接口，因此没有违反 Set 结合中的元素是唯一的这个契约。MultiSet 主要解决的问题是Set中无法解决的重复的元素计数的问题。使用 JDK 中的集合则需要借助 Map<T,Interer>,每次添加一个相同的元素时将 int 值进行累加操作。
+
+- entrySet
+  
+  返回的 Multiset#Entry 的集合。该 Entry 中带有该元素的计数。
+
+- elementSet
+  
+  返回去重的元素的 Set.
+
+- setCount
+
+  直接设置某个元素的个数，数值不能为负，0 则为删除该元素
+
+- count
+  
+  计数制定元素的个数
+
+- HashMultiset/LinkedHashMultiset
+
+基于 AbstractMapBasedMultiset 基类实现的 MultiSet,内部的Map 分别使用的 JDK 的 HashMap 和 LinkedHashMap 。
+
+- TreeMultiSet/AbstractSortedMultiset
+
+有序的 MultiSet 可以传 Comparator 进行排序。内部的实现为 guava 自己实现的 AVL 树的数据结构。在 AbstractSortedMultiset 中提供了 subMultiset。用于获取指定范围内的 Set 的集合。
+
+- ConcurrentHashMultiset/ImmutableMultiset
+
+分别是并发安全的 MultiSet 和 不可变的 Multiset.ConcurrentHashMultiset 是基于 ConcurrentHashMap 实现的。ImmutableMultiset 的实现逻辑同其他 Immutable数据结构的实现。
+
+#### MultiMap
+
+MultiMap 定义的数据接口并没有继承自 Jdk Map 接口，因此并不需要遵守 Map 接口定义的契约。但是其底层是基于 JDK 的 Map< K ,Collection< E > > 模式实现的。
+
+解决 JDK 中没有实现一个键对应多个值的接口。
+
+- MultiMapBuilder/MultimapBuilderWithKeys
+
+与普通 Builder 模式不同，为三层 Builder 模式构建: MultimapBuilderWithKeys->MultimapBuilderWithKeys->MultiMapBuilder 。地一层确定 key的模式返回 MultimapBuilderWithKeys 为第二层 builder 提供给用户确定值的模式，地三层再返回 MultiMapBuilder 用于使用 build 方法构建最终提供给用户使用的 MultiMap 实现。
+
+优点：普通的 Builder 模式，一次只能构建一种特定配置的对象。该处的 Builder 可以复用配置属性。复用第一层 Builder 则构建出来的 value 的存储模式可能不同，但是 key 的存储模式在第一次构建时则已经确定了。
+
+key模式：
+hashKeys:HashMap
+linkedHashKeys:LinkedHashMap
+treeKeys:TreeMap
+enumKeys:EnumMap
+
+value模式：
+
+arrayListValues:ArrayList
+linkedListValues:LinkedList
+hashSetValues:HashSet
+linkedHashSetValues:LinkedHashSet
+treeSetValues:TreeSet
+enumSetValues:EnumSet
+
+- MultiMaps
+
+- MultiMap 的具体实现形式
+
+实现|键行为类似|值行为类似
+:----:|:----:|:----:|
+ArrayListMultimap|HashMap|ArrayList
+HashMultimap|HashMap|HashSet
+LinkedListMultimap|LinkedHashMap|LinkedList
+LinkedHashMultimap|LinkedHashMap|LinkedHashMap
+TreeMultimap|TreeMap|TreeSet
+ImmutableListMultimap|ImmutableMap|ImmutableList
+ImmutableSetMultimap|ImmutableMap|ImmutableSet
+
+目前 guava 推荐使用 MultimapBuilder（guava 16 添加） 构建 MultiMap 不推荐上述实现类（guava 2 添加）的 create 方法直接构建 MultiMap.前者的实现更为灵活，可以将前面的 4 种 key 模式，6 种 value 模式随意组合，总共形成 24 种模式的 MultiMap
+
+- 更具体的 MultiMap 接口
+
+ListMultimap<K,V>, SetMultimap<K,V>, SortedSetMultimap<K,V>
+
+- 常用 API
+
+asMap: 返回的为 MultiMap 的视图，修改会反映到底层的 MultiMap 上。由于 java 的类型机制只能返回 Map< K , Collection < E >> 如果需要返回 Map< K , List < E >>,Map< K , Set < E >>,Map< K , SortedSet < E >> 则可以通过 MultiMaps#asMap 实现类型转换操作。
+
+entries:视图（修改会反映到底层的 MultiMap),键值实体。键有多个值则键重复。
+keySet：视图（修改会反映到底层的 MultiMap)，key 的 Set 集合。
+keys:视图（修改会反映到底层的 MultiMap),key 的 MultiSet 集合，key 对应的 value 值有多少个则 key 便会在集合中出现多少次。可以通过该视图移除指定数量的 value 值。
+values:视图（修改会反映到底层的 MultiMap).返回的是摊平的value 的值的集合。
+
+- BiMap(bi:bidirectional)
+
+键值双向映射。实现了 Map 的接口语义.但是不能添加重复的元素.使用 put 添加重复元素会抛出异常.需要添加重复元素则需要使用 BiMap#forcePut 方法进行.使用 BiMap#inverse 则返回当前 键值映射的 Map 为值键映射的 Map.同时也是原始 BiMap 的视图.对该视图的操作会反映到原始的数据结构上. *HashBiMap 为 guava 自己实现的数据结构,其没有像最近的 JDK HashMap 一样使用了红黑树避免了 HashFlooding攻击,但是该 BiMap 的实现使用了与 HashMap 不同的 Hash 算法,从而减轻了 HashFlooding 攻击的可能性,EnumBiMap/EnumHashBiMap 则底层便是使用的双向 HashMap 的方式实现的* BiMap 使用的 [Hash 算法:MurmurHash3][https://zh.wikipedia.org/wiki/Murmur%E5%93%88%E5%B8%8C]
+
+BiMap 的实现类:
+
+K-V 实现|V-K 实现|BiMap 实现
+:----:|:----:|:----:|
+HashMap|HashMap|HashBiMap
+ImmutableMap|ImmutableMap|ImmutableBiMap
+EnumMap|EnumMap|EnumBiMap
+EnumMap|HashMap|EnumHashBiMap

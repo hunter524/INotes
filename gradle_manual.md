@@ -170,6 +170,12 @@ Convention 通过 DefaultConvention#plugins 自己持有/索引/添加 注册的
 Project#getConfigurations实际上返回的为 ConfigurationContainer其内部持有 Configuration .
 项目的 api,implementation,annotationProcessor,testApi 等等依赖则是做为项目的 Configuration 配置进入项目的。对于上述依赖配置 Configuration 通过 Configuration#getDependencies（DependencySet） 持有 Dependency.
 
+### ConventionMapping/IConventionAware
+
+通常为 Task 继承 IConventionAware 通过 ConventionMapping 为 Task 提供属性扩展服务。（TODO:// 目前推测是生成该对象时通过字节码修改，groovy 动态对象，动态属性，实现对象的动态属性扩展)
+
+对应的提供该实现的为 ConventionTask。
+
 ## Task
 
 创建 Task 时可以通过 Map 指定 Task 相关的属性.属性名称如下: name,description,group,type,dependsOn,overwrite,action,constructorArgs.DefaultTaskContainer#create(Map<String,?>)用于解析Map参数创建对应的Task.
@@ -854,7 +860,7 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 
   名称为 classes 其实实际类型为 DefaultTask,用于聚合上述的 JavaCompile 和 ProcessResources 任务
 
-- Jar/War/Ear
+- Jar/War/Ear/Tar/Zip/AbstractArchiveTask
 
   Jar 在 JavaPlugin#configureArchivesAndComponent 中创建，依赖 SourceSet#output，用于压缩上述文件进入jar包。Jar 任务只执行压缩成jar包的操作，因此其既可以压缩 JavaCompile 任务生成的 class 文件，也可以压缩 Source 文件生成源码包。
   War 则由 WarPlugin 进行创建。
@@ -922,3 +928,4 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 ## gradle 设计准则
 
 - COC(Convention Over Configuration)
+- 不对外提供的实现类放置在 internal 结尾的包名下(后续会通过 拆分 gradleApi 项目，将不对外提供的内部实现从 gradleApi 项目中剔除出去)

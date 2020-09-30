@@ -864,6 +864,8 @@ TODO:://功能和目的
 领域容器用于存放一组领域对象，如:Task,SourceSet,Configuration,ArtifactRepository 等等均有其自己的存放容器。分别为
 DefaultTaskContainer,DefaultSourceSetContainer,DefaultConfigurationContainer,DefaultArtifactRepositoryContainer．
 
+不仅提供容器，还提供添加的对象的后置配置功能。
+
 - PolymorphicDomainObjectContainer
 
   与 NamedDomainObjectContainer 的区别是其支持创建多种不同类型的 DomainObject 放入其中。只需要其具有相同的父类即可。如其接口实现类：DefaultTaskContainer　该容器只要求放入其中的对象为　Task 子类即可．其同 NamedDomainObjectContainer 相同提供即时创建，按需创建的方法。但是其额外提供了获取指定类型的 NamedDomainObjectContainer 的方法用于过滤获得该类型的 NamedDomainObjectContainer.
