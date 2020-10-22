@@ -86,7 +86,7 @@ kotlin 中可以使用 any?:"default"，any?.method() 实现 null 安全避免 N
   before:
 
     ```java
-      class Person implements Comparable\<Person> {
+      class Person implements Comparable <Person> {
       private String lastName;
       private String firstName;
       private int zipCode;
@@ -320,6 +320,10 @@ Map:
   LinkedHashMap:
 
   在 HashMap 的基础上添加了链表实现。
+
+  WeakHashMap:
+
+  key 是弱引用,当key被回收时,自动清理 Map 中的 value 元素
 
 Queue:
 

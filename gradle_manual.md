@@ -320,6 +320,30 @@ CopySpec#from,CopySpec#into 携带 Closure，Action 的均为创建子 CopySpec 
 
   定义在 DependencyHandler 内部，如：gradleApi 定义依赖当前的 gradle api jar 通常用于开发Plugin 和自定义任务,gradleTestKit 通常用于进行单元测试，集成测试的开发，localGroovy 依赖 gradle 内置的 Groovy 通常用于使用 groovy 语言开发 plugin ,task.
 
+#### Dependency 在实现层的抽象
+
+Dependency 是依赖的抽象,但是 Dependency 真实依赖的类型为 DependencyArtifact 或者是 FileCollectionDependency 用于表示一组依赖的文件. 前者表示外部依赖,外部依赖通常由一组 jar,src,pom 构成.后者表示一组文件依赖,即文件依赖的真实以来表示为文件.
+
+- ExternalModuleDependency/ExternalDependency
+  
+  标记是外部依赖,不是 Project 内部的依赖,添加 isChanging 属性,用于标记是否需要每次都检查依赖仓库变化,而不使用本地缓存.添加 isForce 标记是否强制使用该版本的依赖配置,而不使用被约束过的版本依赖.
+
+- ModuleDependency
+
+表示外部 maven,ivy 仓库依赖,添加用于配置是否启用级联依赖功能,默认启用级联依赖功能,当启用级联依赖后可以配置 exclude 规则,用于过滤特定模块不加入依赖.
+
+- SelfResolvingDependency
+
+标记该依赖是可以自己解析的,而不依赖具体的仓库.目前 Project 可以自己解析的依赖主要是 FileCollection 依赖和 Project 项目依赖.
+
+- FileCollectionDependency
+
+表示依赖是文件集合,如: dependencies{files('a.jar','b.jar')},该组依赖便会被解析成为 files 依赖.
+
+- ProjectDependency
+
+表示该依赖 Project 依赖,且该依赖处于当前 Project 层级中.
+
 ### 依赖仓库类型
 
 - flatDir
@@ -729,6 +753,91 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 - Publication
 
   由一系列的 Artifact 组成，用于发布的对象。Publication 有 maven,ivy 仓库不同导致产出的不同。
+
+## Notation 解析
+
+标记解析是 gradle 实现动态传入 Object 进行解析到对应的需要的实体引用的关键.如:Project#file,DependencyHandler#add 均支持直接传入 Object 作为参数,前者需要将 Object 解析为 File 对象,后者需要将 Object 解析成为 Dependency 对象.
+分别为 FileOrUriNotationConverter#parser 和 DependencyNotationParser
+
+在其他很多地方也出现了 NotationParser 的身影,其实现的功能是将一种对象或者Object对象转换成为另外一种对象的操作.同时 NotationParser 中支持的解析数据类型也限定了当前需要传入 Object 对象的地方可以传入哪些具体对象的实现.
+
+### NotationParserBuilder
+
+添加/组合 NotationConverter 构建形成 NotationParser 进行 Notation 的转换操作.构建过程中提供 allowNullInput和implicitConverters 两个功能属性配置.默认不允许 null 和 提供隐性的类型转换操作.
+
+前者表示是否接收 null 作为 notation 标记,构建器将其传入 ErrorHandlingNotationParser 进行判断是否将 null 传递进入 NotationConverter.
+
+后者表示当 notation 的类型是 returnType 的父类/接口/当前类,是否可以优先采用类型转换进行返回,而不经过用户提供的 Converter 进行转换.(这也就是其称之为的隐含 Converter 对应 JustReturningConverter,内部还需要通过 instanceof 进行判断,则相当于需要是当前类才可以进行类型转换)
+
+不同的构建方式返回不同特性的 NotationParser,对应返回的 NotationParser 以及层级包装关系如下:
+
+- create
+
+内置的创建器,不直接返回无法直接调用.
+
+NotationConverterToNotationParserAdapter
+
+- toComposite
+
+ErrorHandlingNotationParser->NotationConverterToNotationParserAdapter
+
+- toFlatteningComposite
+
+ErrorHandlingNotationParser->FlatteningNotationParser->NotationConverterToNotationParserAdapter
+
+### NotationParser
+
+持有 NotationConverter 进行类型转换操作.
+
+### NotationConverter
+
+负责执行具体的 Notation 转换逻辑.
+
+### NotationConvertResult
+
+结果传递对象,内部的 NotationConverter 通过 NotationConvertResult 设置结果,用于给 NotationParser 判断是否需要继续调用其他 NotationConverter 进行结果转换.
+
+### NotationConverters
+
+gradle 在标记/类型转换上提供了一些内部通用的非具体功能性的 NotationConverter.这些功能性的 NotationConverter 为用户提供的含有具体语义的 Converter 提供基础功能上的保证.
+
+- CompositeNotationConverter
+
+组合 Converter 实现遍历 Converter 进行类型转换的功能.
+
+- TypeFilteringNotationConverter
+
+包装用户提供的 Converter 提供类型判断的功能.符合用户指定类型 notation 才传递进入用户配置的 Converter 进行类型转换.
+
+- CharSequenceNotationConverter
+
+TypeFilteringNotationConverter 类型的一种特殊类型.
+
+- JustReturningConverter
+
+判断 notation 类型是否可以直接类型转换成为 returnType.
+
+- TypedNotationConverter/MapNotationConverter
+
+指定类型的 notation 转换和Map标记类型的notation 转换的基类,用户继承这两个类可以实现自己的类型转换逻辑.
+
+### NotationParsers
+
+- NotationConverterToNotationParserAdapter
+
+将 NotationConverter 通过接口适配器模式转换成为 NotationParser.
+
+- ErrorHandlingNotationParser
+
+包装其他 NotationParser 提供异常捕获,是否允许 null notation 的判断.
+  
+- FlatteningNotationParser
+
+将嵌套的 notation 结构,摊平成为线性结构的 Set(去重).如:
+
+List< List < String  > > ==> List< String > ==> Set< String >
+
+List< Map < String,Value> > ==> List< Value > ==> Set< Value >
 
 ## Gradle 执行阶段
 
