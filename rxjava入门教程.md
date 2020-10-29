@@ -48,7 +48,7 @@
 
 ### 函数式编程
 
-[函数式编程基础概念]<https://llh911001.gitbooks.io/mostly-adequate-guide-chinese/content/>
+函数式编程基础概念<https://llh911001.gitbooks.io/mostly-adequate-guide-chinese/content/>
 
 rxjava 很多概念和API 的设计上参考了函数式编程的基础概念,如 Maybe,map等操作符号传入的函数接口则对应于高阶函数的概念,Observable的转换链的建立则和柯里化的概念很像.
 
@@ -734,12 +734,12 @@ public class ZipObservable {
 ```
 
 - zip 与 CountDownLatch 实现的区别
-
-zip 是基于非阻塞算法进行的, CountDownLatch 则是在 CountDownLatch#await 时会使用 LockSupport#park 操作阻塞线程,虽然不占用太多cpu资源,但是占用了进程的线程资源(系统对于每个进程创建的最大线程是有限制的)
+  
+  zip 是基于非阻塞算法进行的, CountDownLatch 则是在 CountDownLatch#await 时会使用 LockSupport#park 操作阻塞线程,虽然不占用太多cpu资源,但是占用了进程的线程资源(系统对于每个进程创建的最大线程是有限制的)
 
 - 如何给异步请求添加超时机制
-
-对 Zip 操作的每个 Observable添加一个 timeout 操作符即可.
+  
+  对 Zip 操作的每个 Observable添加一个 timeout 操作符即可.
 
 ### 实现通用的事件中心(多播/单播/重播/最新的事件)
 
@@ -1078,11 +1078,11 @@ public class AsyncToRxAsync {
 
 ### 防抖
 
-!(debounce)(https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/debounce.png)
+![debounce](https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/debounce.png)
 
-!(throttleFirst(https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/throttleFirst.png)
+![throttleFirst](https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/throttleFirst.png)
 
-!(throttleLast)(https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/throttleLast.png)
+![throttleLast](https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/throttleLast.png)
 
 ## rxjava 实战(函数式编程)
 
@@ -1148,29 +1148,49 @@ Observable observable = Observable.from(words);
 
 rxjava1 的 Subscriber 继承了 Subscription 因此还含有订阅关系的语义表示.
 
-在 rxjava2 rxjava3 则保持相同的设计 Observer 只含有订阅者/观察者的语义.订阅关系的语义则由 Disposable 单独表述.移除了Subscriber 这个类 *为什移除?* .但是也新增了 DisposableObserver 这个类,用于表示 rxjava1 中的 Subscriber 语义.
+在 rxjava2 rxjava3 则保持相同的设计 Observer 只含有订阅者/观察者的语义.订阅关系的语义则由 Disposable 单独表述.移除了Subscriber 这个类.但是也新增了 DisposableObserver 这个类,用于表示 rxjava1 中的 Subscriber 语义.
 
 选择 Observer 和 Subscriber 是完全一样的。它们的区别对于使用者来说主要有两点：
 
 - onStart(): 这是 Subscriber 增加的方法。它会在 subscribe 刚开始，而事件还未发送之前被调用，可以用于做一些准备工作，例如数据的清零或重置。这是一个可选方法，默认情况下它的实现为空。需要注意的是，如果对准备工作的线程有要求onStart() 就不适用了，因为它总是在 subscribe 所发生的线程被调用，而不能指定线程。
 
+- unsubscribe()
+  
+  这是 Subscriber 所实现的另一个接口 Subscription 的方法，用于取消订阅。在这个方法被调用后，Subscriber 将不再接收事件。一般在这个方法调用前，可以使用 isUnsubscribed() 先判断一下状态。 unsubscribe() 这个方法很重要，因为在 subscribe() 之后， Observable 会持有 Subscriber 的引用，这个引用如果不能及时被释放，将有内存泄露的风险。所以最好保持一个原则：要在不再使用的时候尽快在合适的地方调用 unsubscribe() 来解除引用关系，以避免内存泄露的发生。
+  
+  在 rxjava2 rxjava3 中则对应于 Disposable#dispose 和 Disposable#isDisposed 两个方法.
+
+与传统观察者模式不同， RxJava 的事件回调方法除了普通事件 onNext()之外，还定义了两个特殊的事件：onCompleted() 和 onError()。
+
+- onCompleted()
+  
+  事件队列完结。RxJava 不仅把每个事件单独处理，还会把它们看做一个队列。RxJava 规定，当不会再有新的 onNext() 发出时，需要触发 onCompleted() 方法作为标志。
+  
+- onError()
+  
+  事件队列异常。在事件处理过程中出异常时，onError() 会被触发，同时队列自动终止，不允许再有事件发出。
+  
+在一个正确运行的事件序列中, onCompleted() 和 onError() 有且只有一个，并且是事件序列中的最后一个。需要注意的是，onCompleted() 和 onError() 二者也是互斥的，即在队列中调用了其中一个，就不应该再调用另一个。
+
 - onSubscribe
 
   rxjava2 添加在 Observer 中的方法,调用时会传入 Disposable 用于解除订阅关系 ,解决 rxjava1 同步订阅时无法取消的问题.
 
-- unsubscribe(): 这是 Subscriber 所实现的另一个接口 Subscription 的方法，用于取消订阅。在这个方法被调用后，Subscriber 将不再接收事件。一般在这个方法调用前，可以使用 isUnsubscribed() 先判断一下状态。 unsubscribe() 这个方法很重要，因为在 subscribe() 之后， Observable 会持有 Subscriber 的引用，这个引用如果不能及时被释放，将有内存泄露的风险。所以最好保持一个原则：要在不再使用的时候尽快在合适的地方调用 unsubscribe() 来解除引用关系，以避免内存泄露的发生。
-
-在 rxjava2 rxjava3 中则对应于 Disposable#dispose 和 Disposable#isDisposed 两个方法.
-
-与传统观察者模式不同， RxJava 的事件回调方法除了普通事件 onNext()之外，还定义了两个特殊的事件：onCompleted() 和 onError()。
-
-- onCompleted(): 事件队列完结。RxJava 不仅把每个事件单独处理，还会把它们看做一个队列。RxJava 规定，当不会再有新的 onNext() 发出时，需要触发 onCompleted() 方法作为标志。
-  
-- onError(): 事件队列异常。在事件处理过程中出异常时，onError() 会被触发，同时队列自动终止，不允许再有事件发出。
-  
-在一个正确运行的事件序列中, onCompleted() 和 onError() 有且只有一个，并且是事件序列中的最后一个。需要注意的是，onCompleted() 和 onError() 二者也是互斥的，即在队列中调用了其中一个，就不应该再调用另一个。
-
 ```java
+package com.github.hunter524.rxjava.start;
+
+import com.google.common.base.Ascii;
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import io.reactivex.*;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.BiFunction;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.schedulers.Schedulers;
+
+public class CreateObservable {
+    public static void main(String[] args) throws Throwable {
         Observable.create(
                 new ObservableOnSubscribe<String>() {
                     @Override
@@ -1182,12 +1202,58 @@ rxjava1 的 Subscriber 继承了 Subscription 因此还含有订阅关系的语�
                         serialize.onComplete();
                     }
                 })
-                  .subscribe(new Consumer<String>() {
+//                  小写变大写
+                  .map(new Function<String, String>() {
                       @Override
-                      public void accept(String s) throws Exception {
-                          System.out.println("Accetp Data From ObservableEmitter:" + s);
+                      public String apply(String s) throws Exception {
+                          return Ascii.toUpperCase(s);
+                      }
+                  })
+//                  String 流变 char 流
+                  .flatMap(new Function<String, Observable<Character>>() {
+                      @Override
+                      public Observable<Character> apply(String s) throws Exception {
+                          return Observable.fromIterable(Lists.charactersOf(s));
+                      }
+                  })
+//                  char 流去重 ONETWHR
+                  .distinct()
+//                  再排序 E H N O R T W
+                  .sorted()
+                  .subscribeOn(Schedulers.io())
+                  .subscribe(new Observer<Character>() {
+                      @Override
+                      public void onSubscribe(Disposable d) {
+
+                      }
+
+                      @Override
+                      public void onNext(Character character) {
+                          System.out.println(character);
+                      }
+
+                      @Override
+                      public void onError(Throwable e) {
+
+                      }
+
+                      @Override
+                      public void onComplete() {
+
                       }
                   });
+        Thread.sleep(1000);
+    }
+}
+// OUT_PUT:
+// E
+// H
+// N
+// O
+// R
+// T
+// W
+
 ```
 
 ![rxjava 事件流](rxjavaimg/rxjava事件流概括.png)
@@ -1203,7 +1269,7 @@ rxjava2/rxjava3 中 Observable#subscribe 的订阅者如果为 Observer 则该�
 
 - Observer 认为自己不需要再关注 Observable 下发的事件了,调用 Subscription#unsubscribe 或者 Disposable#dispose
 
-- Observable 认为自己不再发送数据了即已经出发了 Observer#onError 或者 Observer#onComplete
+- Observable 认为自己不再发送数据了即数据已经发送完毕,或者在数据的产生过程/处理过程中出现了未捕获的异常.则会分别调用 Observer#onComplete 或 Observer#onError 同时解除订阅关系.
 
 订阅关系在不再需要时需要及时取消,否则会占用资源.
 
@@ -1219,7 +1285,7 @@ rxjava2/rxjava3 中 Observable#subscribe 的订阅者如果为 Observer 则该�
 
 - COMPUTATION
 
-  底层为根据 cpu 核新数配置的固定线程数的线程池.
+  底层为根据 cpu 核心数配置的固定线程数的线程池.
 
 - SINGLE
 
@@ -1233,9 +1299,14 @@ rxjava2/rxjava3 中 Observable#subscribe 的订阅者如果为 Observer 则该�
 
   每次调度任务执行都新建一个线程执行.
 
+- MAIN
+
+  客户端的特殊的主线程
+
 ### Flowable
 
 0..N flows, supporting Reactive-Streams and backpressure
+
 rxjava1 中不存在
 
 ### Single
@@ -1245,6 +1316,7 @@ a flow of exactly 1 item or an error,
 ### Maybe
 
 a flow with no items, exactly one item or an error.
+
 rxjava1 中不存在.
 
 ### Completable
@@ -1253,7 +1325,7 @@ a flow without items but only a completion or error signal,
 
 ### Subject
 
-既是 Observable 也是 Observer
+既是 Observable 也是 Observer.其实可以理解为事件中转站,自己作为 Observer 接收上游下发的事件,同时自己也作为 Observable 可以被订阅,向订阅了自己的订阅者下发之前接收到的事件.
 
 ### subscribeOn/observeOn
 
@@ -1282,7 +1354,7 @@ rxjava2:Observable 不再支持背压控制策略语义,创建安全 Observable 
 
 ### 串行访问
 
-Observer#onNext 的串行化访问
+Observer#onNext/Observer#onComplete/Observer#onError 的串行化访问
 
 rxjava1:
 
@@ -1290,17 +1362,172 @@ rxjava1:
 
 rxjava2,rxjava3:
 
-Observable#unsafeCreate,Observable#create,rxjava1,rxjava2 采用相同的实现和对外接口,Observable#create 重载的方法相比 rxjava1 精简到只有一个,对于背压的控制更加简单.
-
-但是 Observable#create 创建的 Observable 不再保证串行化访问.如果需要串行化访问则需要使用 ObservableEmitter#serialize 获得串行化发射器,使用串行化发射器才能保证下游数据的串行访问.
+Observable#create 创建的 Observable 不再保证串行化访问.如果需要串行化访问则需要使用 ObservableEmitter#serialize 获得串行化发射器,使用串行化发射器才能保证下游数据的串行访问. Observable 不提供串行访问也就不存在背压问题.一旦串行化之后内部便会提供一个SPSC 队列用于缓存来不及消费的元素.
 
 *队列漏和发射循环是实现串行化访问语义的基础算法.*
 
 ### 冷/热 Observable
 
-### Operator/Observable#lift
+冷: 每次订阅都产生事件序列,只在有订阅者的时候产生事件序列.每次产生的事件序列可能相同也可能不同,与作者的实现有关.
 
-rxjava1 遗留的概念,在 rxjava1 中很多内置操作符语义都是通过 Operator 和 Observable#lift 进行实现的.
+热: 不管有没有订阅者都按照既定的规则产生事件序列,可以被多次订阅,但后面的订阅者无法收到前面已经错过的事件序列.主要使用在不想订阅者订阅一次就要求执行一次操作的场景,避免过多的资源耗费.
+
+```java
+package com.github.hunter524.rxjava.start;
+
+import io.reactivex.Observable;
+import io.reactivex.ObservableEmitter;
+import io.reactivex.ObservableOnSubscribe;
+import io.reactivex.Observer;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.observables.ConnectableObservable;
+import io.reactivex.schedulers.Schedulers;
+
+public class HotColdObservable {
+    public static void main(String[] args) throws Throwable {
+        Observable<String> coldOb = Observable.create(new ObservableOnSubscribe<String>() {
+            @Override
+            public void subscribe(ObservableEmitter<String> emitter) throws Exception {
+                emitter.onNext("1-"+"TIME:"+System.nanoTime());
+                emitter.onNext("2-"+"TIME:"+System.nanoTime());
+                emitter.onNext("3-"+"TIME:"+System.nanoTime());
+                emitter.onNext("4-"+"TIME:"+System.nanoTime());
+            }
+        });
+
+        Observable<String> hotOb = Observable
+                .create(new ObservableOnSubscribe<String>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<String> emitter) throws Exception {
+                        emitter.onNext("1-"+"TIME:"+System.nanoTime());
+                        Thread.sleep(1000);
+                        emitter.onNext("2-"+"TIME:"+System.nanoTime());
+                        Thread.sleep(1000);
+                        emitter.onNext("3-"+"TIME:"+System.nanoTime());
+                        Thread.sleep(1000);
+                        emitter.onNext("4-"+"TIME:"+System.nanoTime());
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .publish();
+
+        ((ConnectableObservable<String>) hotOb).connect();
+
+
+        coldOb.subscribe(new Observer<String>() {
+            @Override
+            public void onSubscribe(Disposable d) {
+
+            }
+
+            @Override
+            public void onNext(String s) {
+                System.out.println("cold subscribe 1 ====:"+s);
+            }
+
+            @Override
+            public void onError(Throwable e) {
+
+            }
+
+            @Override
+            public void onComplete() {
+
+            }
+        });
+
+        coldOb.subscribe(new Observer<String>() {
+            @Override
+            public void onSubscribe(Disposable d) {
+
+            }
+
+            @Override
+            public void onNext(String s) {
+                System.out.println("cold subscribe 2====:"+s);
+            }
+
+            @Override
+            public void onError(Throwable e) {
+
+            }
+
+            @Override
+            public void onComplete() {
+
+            }
+        });
+
+        Thread.sleep(1100);
+
+        hotOb.subscribe(new Observer<String>() {
+            @Override
+            public void onSubscribe(Disposable d) {
+
+            }
+
+            @Override
+            public void onNext(String s) {
+                System.out.println("hot subscribe 1 ====:"+s);
+            }
+
+            @Override
+            public void onError(Throwable e) {
+
+            }
+
+            @Override
+            public void onComplete() {
+
+            }
+        });
+        Thread.sleep(1100);
+
+        hotOb.subscribe(new Observer<String>() {
+            @Override
+            public void onSubscribe(Disposable d) {
+
+            }
+
+            @Override
+            public void onNext(String s) {
+                System.out.println("hot subscribe 2 ====:"+s);
+            }
+
+            @Override
+            public void onError(Throwable e) {
+
+            }
+
+            @Override
+            public void onComplete() {
+
+            }
+        });
+        Thread.sleep(5000);
+    }
+//    OUT_PUT
+//    cold subscribe 1 ====:1-TIME:39156321281444
+//    cold subscribe 1 ====:2-TIME:39156321810264
+//    cold subscribe 1 ====:3-TIME:39156321970437
+//    cold subscribe 1 ====:4-TIME:39156322094173
+
+//    cold subscribe 2====:1-TIME:39156322506015
+//    cold subscribe 2====:2-TIME:39156322684361
+//    cold subscribe 2====:3-TIME:39156322796437
+//    cold subscribe 2====:4-TIME:39156322914416
+
+//    hot subscribe 1 ====:3-TIME:39158324861822
+//    hot subscribe 1 ====:4-TIME:39159325097997
+
+//    hot subscribe 2 ====:4-TIME:39159325097997
+}
+```
+
+### Operator/Observable#lift/ObservableTransformer/Observable#compose
+
+rxjava1 遗留的概念,在 rxjava1 中很多内置操作符语义都是通过 Operator 和 Observable#lift 进行实现的.有点复杂不够直观.
+前者用来转换 Observer 后者用来转换 Observable.
 
 rxjava2 和 rxjava3 中则不再使用 Operator 实现内置的操作符语义.转而使用包装 Observable 和 Observer 实现操作符语义.提供给用户使用 Observable#as 操作符进行 Observable 的包装.[Uber AutoDispose][https://uber.github.io/AutoDispose/] 则是基于该操作符进行的扩展,从而实现根据生命周期自动解除订阅的功能.
 
@@ -1318,7 +1545,7 @@ rxjava1 遗留的概念,用于消费者协调生产者的生产效率,解决背�
 
 - 主流的各种语言的实现 <https://github.com/ReactiveX> 其中 rxjava 43.6k 个 star.rxjs 23.2k 个 star.
 
-- Spring 也支持响应试编程 <https://spring.io/reactive> 只不过其推荐了另外一种实现方式<https://github.com/reactor/>作为其生态的一部分。
+- Spring 也支持响应试编程 <https://spring.io/reactive> 只不过其推荐了另外一种实现方式<https://github.com/reactor/>作为其生态的一部分。但是其也实现了 reactive-streams 规范.
 
 - jdk 9 增加了 flow 响应式编程的支持 <https://docs.oracle.com/javase/9/docs/api/java/util/concurrent/Flow.Publisher.html>
 
@@ -1328,9 +1555,9 @@ reactivex 官网下滑 <http://reactivex.io>
 
 ### Reference
 
-- 扔物线的 rxjava 入门教程 <https://gank.io/post/560e15be2dca930e00da1083>
+- 扔物线的 rxjava 入门教程 <https://gank.io/post/560e15be2dca930e00da1083> *本人入门时看的第一篇教程*
 
-- rxjava1 源码分析 <https://blog.piasy.com/AdvancedRxJava/index.html>
+- rxjava1 源码分析 <https://blog.piasy.com/AdvancedRxJava/index.html> *阅读 rxjava 源码是参考的系列文章,读懂了 rxjava1 的源码 rxjava2 rxjava3 的源码根本不存在问题,因为 rxjava1 的实现机制更复杂,不够简洁*
 
 - 串行访问,非阻塞算法 (emitter-loop)发射循环<https://blog.piasy.com/AdvancedRxJava/2016/05/06/operator-concurrency-primitives/index.html>
 
@@ -1338,8 +1565,8 @@ reactivex 官网下滑 <http://reactivex.io>
 
 - JCTools Java Concurrent Tools <https://github.com/JCTools/JCTools>
 
-- rxjava 函数式扩展<https://github.com/akarnokd/RxJavaExtensions>
+- rxjava 函数式扩展 <https://github.com/akarnokd/RxJavaExtensions>
 
 - rxjava 操作附汇总 <https://github.com/ReactiveX/RxJava/wiki/Alphabetical-List-of-Observable-Operators>
 
-- rxjava 发起者,主要作者的blog,匈牙利 布达佩斯 匈牙利科学院的工程学博士<https://akarnokd.blogspot.com/>作者只主写了 rxjava 其他语言的版本均由开源社区的其他人员创作.
+- rxjava 发起者,akarnokd 匈牙利,布达佩斯 匈牙利科学院的工程学博士<https://akarnokd.blogspot.com/>作者只主写了 rxjava. 其他语言的版本均由开源社区的其他人员创作.其也是 reactive-streams 规范的制定者之一.
