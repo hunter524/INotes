@@ -10,7 +10,7 @@
 
 - 响应式编程
   
-  执行者作为观察者,等待指定事件,当指定事件触发才去执行动作.响应式编程调用方法不是直接去执行操作,而是只是去注册事件监听器.因此响应式编程具有等待稍后执行的语义,执行行为只是对事件的一种响应而已,故此称为响应式编程.因此响应式编程其实是一种异步编程,当然也可以做到同步模式,但是这就失去了其真正的意义.也就是说响应式编程实质上基于事件驱动的异步编程模式.
+  执行者作为观察者,等待指定事件,当指定事件触发才去执行动作.响应式编程调用方法不是直接去执行操作,而只是去注册事件监听器.因此响应式编程具有等待稍后执行的语义,执行行为只是对事件的一种响应,故此称为响应式编程.因此响应式编程其实是一种异步编程,当然也可以做到同步模式,但是这就失去了其真正的意义.也就是说响应式编程实质上基于事件驱动的异步编程模式.
 
   根本上响应式编程也是非阻塞式编成,可以提升程序的整体性能.
 
@@ -30,13 +30,11 @@
 
 ### RxJava 好在哪儿
 
-换句话说，『同样是做异步，为什么人们用它，而不用现成的 ForkJoinPool,ScheduledExecutorService,ExecutorService,CountDownLatch,CyclicBarrier,Callable,FutureTask,各种队列？』
+换句话说，『同样是做异步，为什么人们用它，而不用现成的 ScheduledExecutorService,ExecutorService,ForkJoinPool,Callable,FutureTask,CountDownLatch,CyclicBarrier,Semaphore,LinkedBlockingQueue,SynchronousQueue,PriorityBlockingQueue 等』
 
 - 简洁。
   
-  异步操作很关键的一点是程序的简洁性，因为在调度过程比较复杂的情况下，异步代码经常会既难写也难被读懂。但是 rxjava 随着程序逻辑变得越来越复杂，它依然能够保持简洁。该处需要强调的是逻辑复杂度变得简洁而不是代码量减少.(逻辑变得简洁才能提升代码的读写速度)
-  
-  线程池配置对初学者不友好,初学者滥用线程池,乱配置线程池参数.(ForkJoinPool,ScheduledExecutorService,ExecutorService,CountDownLatch,CyclicBarrier,Callable,FutureTask,各种队列,分别用来干什么的?)线程池提交任务 Callable,Runnable 有什么却别?并发怎么保证可见性?怎么同步?
+  异步操作很关键的一点是程序的简洁性，因为在调度过程比较复杂的情况下，异步代码经常会既难写也难被读懂。但是 rxjava 随着程序逻辑变得越来越复杂，它依然能够保持简洁。该处需要强调的是逻辑复杂度变得简洁而不是代码量减少.(逻辑变得简洁才能提升代码的读写速度),使用rxjava 编写的异步程序可以一会儿排成人字一会儿排成一字.
 
 ### 响应式编程的基础
 
@@ -44,13 +42,13 @@
   
   Callback. 对于观察者模式则存在 Observable (被观察者) 和 Observer(观察者) 或者可以称之为 Subscriber (订阅者).对于回调我们则可以称之为 注册中心/事件中心/事件分发器 也就是被观察者, CallBack 则是接受被观察者的调用.(一旦谈到回调,不可避免的就无法回避 Callback hell 这个话题)
 
-- 代理模式/装饰者模式
+- 代理模式/装饰者模式/责任链模式
 
-  rxjava1 rxjava2 rxjava3:源码实现中代理模式遍布各个角落
+  Observable 构建成的转换链实际上像是一种责任链.很多操作符的实现对 Observable 和 Observer 的包装/增强/限制 则更像是装饰者模式和代理模式.
 
 ### 函数式编程
 
-[函数式编程基础概念][https://llh911001.gitbooks.io/mostly-adequate-guide-chinese/content/]
+[函数式编程基础概念]<https://llh911001.gitbooks.io/mostly-adequate-guide-chinese/content/>
 
 rxjava 很多概念和API 的设计上参考了函数式编程的基础概念,如 Maybe,map等操作符号传入的函数接口则对应于高阶函数的概念,Observable的转换链的建立则和柯里化的概念很像.
 
@@ -94,11 +92,44 @@ var map = curry(function(f, ary) {
   return ary.map(f);
 });
 
+match(/\s+/g, "hello world");
+// [ ' ' ]
+
+match(/\s+/g)("hello world");
+// [ ' ' ]
+
+var hasSpaces = match(/\s+/g);
+// function(x) { return x.match(/\s+/g) }
+
+hasSpaces("hello world");
+// [ ' ' ]
+
+hasSpaces("spaceless");
+// null
+
+filter(hasSpaces, ["tori_spelling", "tori amos"]);
+// ["tori amos"]
+
+var findSpaces = filter(hasSpaces);
+// function(xs) { return xs.filter(function(x) { return x.match(/\s+/g) }) }
+
+findSpaces(["tori_spelling", "tori amos"]);
+// ["tori amos"]
+
+var noVowels = replace(/[aeiou]/ig);
+// function(replacement, x) { return x.replace(/[aeiou]/ig, replacement) }
+
+var censored = noVowels("*");
+// function(x) { return x.replace(/[aeiou]/ig, "*") }
+
+censored("Chocolate Rain");
+// 'Ch*c*l*t* R**n'
+
 ```
 
-在 js 中函数可能算是一等公民,kotlin 中也可以便捷写出柯里化模式的方法.java 对象是一等公民的语言实现柯里化则比较费劲.但是java其实也在积极的引入函数式编程. java 中的 lambda,函数式接口,方法引用.
+在 js 中函数可能算是一等公民,kotlin 中也可以便捷写出柯里化模式的方法.java 对象是一等公民的语言实现柯里化则比较费劲.但是java其实也在积极的引入函数式编程. java 中的 lambda,函数式接口,方法引用,引入invokedynamic 指令.
 
-下面的 rxjava 代码均以 rxjava2 版本作为基础.虽然 rxjava2 将于 2021.02 停止维护.目前最新版本 rxjava3.[rxjava1 rxjava2 向 rxjava3 的迁移手册][https://github.com/ReactiveX/RxJava/wiki/What's-different-in-3.0] rxjava1 rxjava2 rxjava3 在同一个项目中是可以并存的,
+下面的 rxjava 代码均以 rxjava2 版本作为基础.虽然 rxjava2 将于 2021.02 停止维护.目前最新版本 rxjava3.[rxjava1 rxjava2 向 rxjava3 的迁移手册][https://github.com/ReactiveX/RxJava/wiki/What's-different-in-3.0] rxjava1 rxjava2 rxjava3 在同一个项目中是可以并存的.rxjava1 的实现由于历史原因实现的并不好,但是 rxjava1 制定出的操作附语义,基础高性能非阻塞算法并没有太多改变.rxjava2 的实现由于异步编程规范接口的诞生,同时根据rxjava1在实践中产生的问题,修改了很多操作符实现的架构模式,并且修复了 rxjava1 由于架构问题而没有办法修复的问题.本质上 rxjava2 对于 rxjava1 则是一次比较大的改动,改动主要在实现的架构模式上和对接新的异步编程规范接口上. rxhava3 相对于 rxjava2 所做的工作则更多的是功能的增强,优化.
 
 ## rxjava 实战(异步编程)
 
@@ -120,98 +151,6 @@ import java.util.concurrent.TimeUnit;
 
 public class CallBackHell {
     public static ExecutorService CACHED_EXECUTOR_SERVICE = Executors.newCachedThreadPool();
-
-
-    public static void main(String[] args) {
-//        旧的 callbackHell
-        getPersonInfo("acc", "pwd", new GetPersonCallBack() {
-            @Override
-            public void onSucces(PersonInfo personInfo) {
-                getTradeData(personInfo.token, new GetTradeDataCallBack() {
-                    @Override
-                    public void onSucces(TradeData tradedata) {
-                        getTradeData(personInfo.token, new GetTradeDataCallBack() {
-                            @Override
-                            public void onSucces(TradeData tradedata) {
-                                getTradeDetail(tradedata.id, new GetTradeDetailCallBack() {
-                                    @Override
-                                    public void onSucces(TradeDetail tradeDetail) {
-                                        System.out.println("Call Back hell Detail:" + tradeDetail.content);
-                                    }
-
-                                    @Override
-                                    public void onError() {
-
-                                    }
-                                });
-                            }
-
-                            @Override
-                            public void onError() {
-
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void onError() {
-
-                    }
-                });
-            }
-
-            @Override
-            public void onError() {
-
-            }
-        });
-
-
-//        rxjava wrapped
-        getPersonInfoObWrapp("acc", "pwd")
-                .flatMap(new Function<PersonInfo, ObservableSource<TradeData>>() {
-                    @Override
-                    public ObservableSource<TradeData> apply(PersonInfo personInfo) throws Exception {
-                        return getTradeDataObWrapp(personInfo.token);
-                    }
-                })
-                .flatMap(new Function<TradeData, ObservableSource<TradeDetail>>() {
-                    @Override
-                    public ObservableSource<TradeDetail> apply(TradeData tradeData) throws Exception {
-                        return getTradeDetailObWrapp(tradeData.id);
-                    }
-                })
-                .observeOn(Schedulers.trampoline())
-                .subscribe(new Consumer<TradeDetail>() {
-                    @Override
-                    public void accept(TradeDetail tradeDetail) throws Exception {
-                        System.out.println("RxJava Wrap Detail:" + tradeDetail.content);
-                    }
-                });
-// no wrap rxjava
-
-        getPersonInfoOb("acc", "pwd")
-                .flatMap(new Function<PersonInfo, ObservableSource<TradeData>>() {
-                    @Override
-                    public ObservableSource<TradeData> apply(PersonInfo personInfo) throws Exception {
-                        return getTradeDataOb(personInfo.token);
-                    }
-                })
-                .flatMap(new Function<TradeData, ObservableSource<TradeDetail>>() {
-                    @Override
-                    public ObservableSource<TradeDetail> apply(TradeData tradeData) throws Exception {
-                        return getTradeDetailOb(tradeData.id);
-                    }
-                })
-                .observeOn(Schedulers.trampoline())
-                .subscribe(new Consumer<TradeDetail>() {
-                    @Override
-                    public void accept(TradeDetail tradeDetail) throws Exception {
-                        System.out.println("RxJava NoWrap Detail:" + tradeDetail.content);
-                    }
-                });
-
-    }
 
     public static class PersonInfo {
 
@@ -298,6 +237,86 @@ public class CallBackHell {
         });
     }
 
+    public static void main(String[] args) {
+//        旧的 callbackHell
+        getPersonInfo("acc", "pwd", new GetPersonCallBack() {
+            @Override
+            public void onSucces(PersonInfo personInfo) {
+                getTradeData(personInfo.token, new GetTradeDataCallBack() {
+                    @Override
+                    public void onSucces(TradeData tradedata) {
+                        getTradeDetail(tradedata.id, new GetTradeDetailCallBack() {
+                            @Override
+                            public void onSucces(TradeDetail tradeDetail) {
+                                System.out.println("Call Back hell Detail:" + tradeDetail.content);
+                            }
+
+                            @Override
+                            public void onError() {
+
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onError() {
+
+                    }
+                });
+            }
+
+            @Override
+            public void onError() {
+
+            }
+        });
+
+
+//        rxjava wrapped
+        getPersonInfoObWrapp("acc", "pwd")
+                .flatMap(new Function<PersonInfo, ObservableSource<TradeData>>() {
+                    @Override
+                    public ObservableSource<TradeData> apply(PersonInfo personInfo) throws Exception {
+                        return getTradeDataObWrapp(personInfo.token);
+                    }
+                })
+                .flatMap(new Function<TradeData, ObservableSource<TradeDetail>>() {
+                    @Override
+                    public ObservableSource<TradeDetail> apply(TradeData tradeData) throws Exception {
+                        return getTradeDetailObWrapp(tradeData.id);
+                    }
+                })
+                .observeOn(Schedulers.trampoline())
+                .subscribe(new Consumer<TradeDetail>() {
+                    @Override
+                    public void accept(TradeDetail tradeDetail) throws Exception {
+                        System.out.println("RxJava Wrap Detail:" + tradeDetail.content);
+                    }
+                });
+// no wrap rxjava
+
+        getPersonInfoOb("acc", "pwd")
+                .flatMap(new Function<PersonInfo, ObservableSource<TradeData>>() {
+                    @Override
+                    public ObservableSource<TradeData> apply(PersonInfo personInfo) throws Exception {
+                        return getTradeDataOb(personInfo.token);
+                    }
+                })
+                .flatMap(new Function<TradeData, ObservableSource<TradeDetail>>() {
+                    @Override
+                    public ObservableSource<TradeDetail> apply(TradeData tradeData) throws Exception {
+                        return getTradeDetailOb(tradeData.id);
+                    }
+                })
+                .observeOn(Schedulers.trampoline())
+                .subscribe(new Consumer<TradeDetail>() {
+                    @Override
+                    public void accept(TradeDetail tradeDetail) throws Exception {
+                        System.out.println("RxJava NoWrap Detail:" + tradeDetail.content);
+                    }
+                });
+
+    }
     // 包装老的接口进入 rxjava 的模式
     public static Observable<PersonInfo> getPersonInfoObWrapp(String acc, String pwd) {
         return Observable.<PersonInfo>create(new ObservableOnSubscribe<PersonInfo>() {
@@ -406,6 +425,87 @@ public class CallBackHell {
 - JS 中的 Promise,async,await
   
 - Kotlin 中以协程为基础的 suspend fun (挂起方法)
+
+### 解决频繁执行线程切换的需求
+
+```java
+package com.github.hunter524.rxjava.start;
+
+import io.reactivex.Observable;
+import io.reactivex.Observer;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Function;
+import io.reactivex.schedulers.Schedulers;
+
+public class ThreadChange {
+
+    public static void main(String[] args) throws Throwable {
+        Observable.just("start")
+                  .observeOn(Schedulers.io())
+                  .map(new Function<String, String>() {
+                      @Override
+                      public String apply(String s) throws Exception {
+                          System.out.println("Map1 Thread:" + Thread.currentThread());
+                          return s + " map1 io ";
+                      }
+                  })
+                  .observeOn(Schedulers.computation())
+                  .map(new Function<String, String>() {
+                      @Override
+                      public String apply(String s) throws Exception {
+                          System.out.println("Map2 Thread:" + Thread.currentThread());
+                          return s + "map2 computation";
+                      }
+                  })
+                  .observeOn(Schedulers.newThread())
+                  .map(new Function<String, String>() {
+                      @Override
+                      public String apply(String s) throws Exception {
+                          System.out.println("Map3 Thread:" + Thread.currentThread());
+                          return s + " map3 newThread";
+                      }
+                  })
+                  .observeOn(Schedulers.single())
+                  .map(new Function<String, String>() {
+                      @Override
+                      public String apply(String s) throws Exception {
+                          System.out.println("Map4 Thread:" + Thread.currentThread());
+                          return s + " map4 single";
+                      }
+                  })
+                  .subscribe(new Observer<String>() {
+                      @Override
+                      public void onSubscribe(Disposable d) {
+
+                      }
+
+                      @Override
+                      public void onNext(String s) {
+                          System.out.println("onNext Thread:" + Thread.currentThread());
+                          System.out.println("onNext:" + s);
+                      }
+
+                      @Override
+                      public void onError(Throwable e) {
+
+                      }
+
+                      @Override
+                      public void onComplete() {
+
+                      }
+                  });
+        Thread.sleep(1000);
+    }
+}
+//    OUT_PUT:
+//    Map1 Thread:Thread[RxCachedThreadScheduler-1,5,main]
+//    Map2 Thread:Thread[RxComputationThreadPool-1,5,main]
+//    Map3 Thread:Thread[RxNewThreadScheduler-1,5,main]
+//    Map4 Thread:Thread[RxSingleScheduler-1,5,main]
+//    onNext Thread:Thread[RxSingleScheduler-1,5,main]
+//    onNext:start map1 io map2 computation map3 newThread map4 single
+```
 
 ### 同步两个异步请求/并发计算同步回调
 
@@ -643,7 +743,7 @@ zip 是基于非阻塞算法进行的, CountDownLatch 则是在 CountDownLatch#a
 
 ### 实现通用的事件中心(多播/单播/重播/最新的事件)
 
-在 Android 中需要使用 LocalBroadcastManager (可以实现复杂的事件下发机制).在 java 中则需要基于 java.util.Observable 和 java.util.Observer 实现.
+在 Android 中需要使用 LocalBroadcastManager (可以实现复杂的事件下发机制).在 java 中则需要基于 java.util.Observable 和 java.util.Observer 实现.或者引入别人实现的功能强大的事件总线库.
 
 - 基于 JDK 实现的事件中心
 
@@ -723,24 +823,21 @@ public class JavaEventCenter {
         }
     }
 }
-```
 
-```java
+// OUTPUT:
+// Man Observer Type:Human
+// Man Observer Type:Man
+// Man Receive:Man:Man 1
+// Man Observer Type:Woman
+// Woman Observer Type:Human
+// Man Observer Type:Human
+// Woman Observer Type:Man
+// Man Observer Type:Man
+// Man Receive:Man:Man 2
+// Woman Observer Type:Woman
+// Woman Receive:Woman:Woman 2
+// Man Observer Type:Woman
 
-OUTPUT:
-
-Man Observer Type:Human
-Man Observer Type:Man
-Man Receive:Man:Man 1
-Man Observer Type:Woman
-Woman Observer Type:Human
-Man Observer Type:Human
-Woman Observer Type:Man
-Man Observer Type:Man
-Man Receive:Man:Man 2
-Woman Observer Type:Woman
-Woman Receive:Woman:Woman 2
-Man Observer Type:Woman
 ```
 
 后面加入的监听者无法收到前面已经下发的事件?如果后面加入的监听者要接收到最新下发的事件是不是就又要自己写代码了?如果后面加入的监听者要收到之前下发的所有事件是不是又要重新写代码?让 Observer 收到所有事件自己过滤要不要处理是不是不安全?
@@ -822,19 +919,16 @@ public class RxJavaEventCenter {
     }
 }
 
-```
-
-```java
-OUTPUT:
-Observer Human:human 0
-Observer Human:human 1
-Observer Human:Man:man 0
-Observer Human:Man:man 1
-Observer Human:Woman:woman 0
-Observer Human:Man:man 1
-Observer Man:Man:man 1
-Observer Human:Man:man 2
-Observer Man:Man:man 2
+//OUTPUT:
+//Observer Human:human 0
+//Observer Human:human 1
+//Observer Human:Man:man 0
+//Observer Human:Man:man 1
+//Observer Human:Woman:woman 0
+//Observer Human:Man:man 1
+//Observer Man:Man:man 1
+//Observer Human:Man:man 2
+//Observer Man:Man:man 2
 ```
 
 - AsyncSubject
@@ -986,7 +1080,9 @@ public class AsyncToRxAsync {
 
 !(debounce)(https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/debounce.png)
 
-!(throttleFirst([https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/throttleFirst.png)
+!(throttleFirst(https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/throttleFirst.png)
+
+!(throttleLast)(https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/throttleLast.png)
 
 ## rxjava 实战(函数式编程)
 
@@ -1008,7 +1104,9 @@ public class AsyncToRxAsync {
 
 ## rxjava 基础组件简介
 
-### Observable/创建
+### Observable(创建/被观察者)
+
+0..N flows, no backpressure,
 
 ```java
         Observable.create(
@@ -1034,7 +1132,17 @@ public class AsyncToRxAsync {
                   })
 ```
 
-### Subscriber/Observer
+```java
+String[] words = {"Hello", "Hi", "Aloha"};
+Observable observable = Observable.from(words);
+// 将会依次调用：
+// onNext("Hello");
+// onNext("Hi");
+// onNext("Aloha");
+// onCompleted();
+```
+
+### Subscriber/Observer(观察者)
 
 均为含有订阅者/观察者的语义.
 
@@ -1085,23 +1193,67 @@ rxjava1 的 Subscriber 继承了 Subscription 因此还含有订阅关系的语�
 ![rxjava 事件流](rxjavaimg/rxjava事件流概括.png)
 ![rxjava 订阅流程](rxjavaimg/rxjava订阅执行流程.png)
 
-### Subscription/Disposable
+### Subscription/Disposable(订阅/订阅关系)
+
+rxjava1 中 Observable#subscribe 订阅方法的返回值则为 Subscription 订阅关系.
+
+rxjava2/rxjava3 中 Observable#subscribe 的订阅者如果为 Observer 则该订阅方法的返回值为 void,订阅关系的描述 Disposable 则通过 Observer#onSubscribe 下发进入 Observer 内部用于取消订阅关系.
+
+订阅关系取消的条件有两种:
+
+- Observer 认为自己不需要再关注 Observable 下发的事件了,调用 Subscription#unsubscribe 或者 Disposable#dispose
+
+- Observable 认为自己不再发送数据了即已经出发了 Observer#onError 或者 Observer#onComplete
+
+订阅关系在不再需要时需要及时取消,否则会占用资源.
 
 ### Scheduler
 
+传递给 Observable#observeOn,Observable#subscribeOn 的线程任务调度器用于切换订阅者观察者的执行线程.
+
+内置线程调度器分为:
+
+- IO
+
+  底层为线程池的线程最大数量设置为 int 的最大值.
+
+- COMPUTATION
+
+  底层为根据 cpu 核新数配置的固定线程数的线程池.
+
+- SINGLE
+
+  底层为只有一个线程的线程池
+
+- TRAMPOLINE
+
+  蹦床模式,在当前线程执行该任务但是并不是立即执行,会稍后执行.实现为使当前线程会进入事件循环模式.
+
+- NEW_THREAD
+
+  每次调度任务执行都新建一个线程执行.
+
 ### Flowable
 
+0..N flows, supporting Reactive-Streams and backpressure
 rxjava1 中不存在
 
 ### Single
 
+a flow of exactly 1 item or an error,
+
 ### Maybe
 
+a flow with no items, exactly one item or an error.
 rxjava1 中不存在.
 
 ### Completable
 
+a flow without items but only a completion or error signal,
+
 ### Subject
+
+既是 Observable 也是 Observer
 
 ### subscribeOn/observeOn
 
@@ -1112,6 +1264,10 @@ rxjava1 中不存在.
 - observeOn
 
   切换响应者的线程.
+
+### Flowable/Observable/Single/Maybe/Completable
+
+是可以相互转换的,产生的事件序列依次从多到少.
 
 ## 高级概念
 
@@ -1183,5 +1339,7 @@ reactivex 官网下滑 <http://reactivex.io>
 - JCTools Java Concurrent Tools <https://github.com/JCTools/JCTools>
 
 - rxjava 函数式扩展<https://github.com/akarnokd/RxJavaExtensions>
+
+- rxjava 操作附汇总 <https://github.com/ReactiveX/RxJava/wiki/Alphabetical-List-of-Observable-Operators>
 
 - rxjava 发起者,主要作者的blog,匈牙利 布达佩斯 匈牙利科学院的工程学博士<https://akarnokd.blogspot.com/>作者只主写了 rxjava 其他语言的版本均由开源社区的其他人员创作.
