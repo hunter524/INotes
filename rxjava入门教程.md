@@ -32,7 +32,7 @@
 
 换句话说，『同样是做异步，为什么人们用它，而不用现成的 ScheduledExecutorService,ExecutorService,ForkJoinPool,Callable,FutureTask,CountDownLatch,CyclicBarrier,Semaphore,LinkedBlockingQueue,SynchronousQueue,PriorityBlockingQueue 等』
 
-- 简洁。
+- 简洁
   
   异步操作很关键的一点是程序的简洁性，因为在调度过程比较复杂的情况下，异步代码经常会既难写也难被读懂。但是 rxjava 随着程序逻辑变得越来越复杂，它依然能够保持简洁。该处需要强调的是逻辑复杂度变得简洁而不是代码量减少.(逻辑变得简洁才能提升代码的读写速度),使用rxjava 编写的异步程序可以一会儿排成人字一会儿排成一字.
 
@@ -40,7 +40,7 @@
 
 - 观察者模式,
   
-  Callback. 对于观察者模式则存在 Observable (被观察者) 和 Observer(观察者) 或者可以称之为 Subscriber (订阅者).对于回调我们则可以称之为 注册中心/事件中心/事件分发器 也就是被观察者, CallBack 则是接受被观察者的调用.(一旦谈到回调,不可避免的就无法回避 Callback hell 这个话题)
+  Callback. 对于观察者模式则存在 Observable (被观察者) 和 Observer(观察者) 或者可以称之为 Subscriber (订阅者).对于回调我们需要有注册中心/事件中心/事件分发器也就是被观察者, CallBack 则是接受被观察者的调用.(一旦谈到回调,就无法回避 Callback hell 这个话题)
 
 - 代理模式/装饰者模式/责任链模式
 
@@ -127,9 +127,11 @@ censored("Chocolate Rain");
 
 ```
 
-在 js 中函数可能算是一等公民,kotlin 中也可以便捷写出柯里化模式的方法.java 对象是一等公民的语言实现柯里化则比较费劲.但是java其实也在积极的引入函数式编程. java 中的 lambda,函数式接口,方法引用,引入invokedynamic 指令.
+在 js 中函数可能算是一等公民,kotlin 中也可以便捷写出柯里化模式的方法.java 对象是一等公民的语言实现柯里化则比较费劲.但是java其实也在积极的引入函数式编程. java 中的 lambda,函数式接口,方法引用,stream流,引入invokedynamic 指令.
 
-下面的 rxjava 代码均以 rxjava2 版本作为基础.虽然 rxjava2 将于 2021.02 停止维护.目前最新版本 rxjava3.[rxjava1 rxjava2 向 rxjava3 的迁移手册][https://github.com/ReactiveX/RxJava/wiki/What's-different-in-3.0] rxjava1 rxjava2 rxjava3 在同一个项目中是可以并存的.rxjava1 的实现由于历史原因实现的并不好,但是 rxjava1 制定出的操作附语义,基础高性能非阻塞算法并没有太多改变.rxjava2 的实现由于异步编程规范接口的诞生,同时根据rxjava1在实践中产生的问题,修改了很多操作符实现的架构模式,并且修复了 rxjava1 由于架构问题而没有办法修复的问题.本质上 rxjava2 对于 rxjava1 则是一次比较大的改动,改动主要在实现的架构模式上和对接新的异步编程规范接口上. rxhava3 相对于 rxjava2 所做的工作则更多的是功能的增强,优化.
+下面的 rxjava 代码均以 rxjava2 版本作为基础.虽然 rxjava2 将于 2021.02 停止维护.目前最新版本 rxjava3.[rxjava1 rxjava2 向 rxjava3 的迁移手册]<https://github.com/ReactiveX/RxJava/wiki/What's-different-in-3.0> rxjava1 rxjava2 rxjava3 在同一个项目中是可以并存的.rxjava1 的实现由于历史原因实现的并不好,但是 rxjava1 制定出的操作附语义,基础高性能非阻塞算法并没有太多改变.rxjava2 的实现由于响应式编程规范接口的诞生,同时根据rxjava1在实践中产生的问题,修改了很多操作符实现的架构模式,并且修复了 rxjava1 由于架构问题而没有办法修复的问题.本质上 rxjava2 对于 rxjava1 则是一次比较大的改动,改动主要在实现的架构模式上和对接新的异步编程规范接口上. rxjava3 相对于 rxjava2 所做的工作则更多的是功能的增强,优化.
+
+rxjava1 中没有实现响应式编程的规范接口,因为该规范出现在 2014年1月(开始制定),而rxjava1则是从2012年3月开始开发的.
 
 ## rxjava 实战(异步编程)
 
@@ -1013,6 +1015,13 @@ public class RxAsyncToSync {
 
         Thread.sleep(3000);
     }
+//    OUT_PUT:
+//    one async start subscribe @1604025816577
+//    one async end subscribe @1604025816596
+//    one sync block start Get @1604025816596
+//    one async onNext @1604025817613Value:one
+//    one async onNext @1604025817613Value:two
+//    one sync block end Get @1604025817630Values:[one, two]
 }
 ```
 
@@ -1069,8 +1078,14 @@ public class AsyncToRxAsync {
                       }
                   });
     }
+
+//    OUT_PUT:
+//    subscribe @:1604025972172
+//    onNext @:1604025973184Value:callable return
 }
 ```
+
+当然也可以将 RxAsync 转换成为 Future .只需要使用 Observable#toFuture
 
 ### 并发竞争/及时取消
 
@@ -1092,15 +1107,25 @@ public class AsyncToRxAsync {
 
 ## reactive-streams 规范接口
 
+Reactive Streams <http://www.reactive-streams.org/> <https://github.com/reactive-streams/reactive-streams-jvm>
+
+项目核心代码只定义了四个接口,但是大部分响应式编程的库都引用该库,遵守该接口规范.
+
 ### Publisher
 
 表示无限事件序列的生产者,rxjava2 中的 Flowable 实现了该接口,在 rxjava1 中没有实现该规范,因为该规范出现在 2014年1月(开始制定),而rxjava1则是从2012年3月开始开发的.
 
 ### Subscriber
 
+表示事件的订阅者, Subscriber 通过 Publisher#subscribe 方法向生产者进行订阅. Publisher 则通过 Subscriber#onSubscribe,Subscriber#onNext,Subscriber#onError,Subscriber#onComplete 分别下发订阅关系,事件,error 状态,结束状态.
+
 ### Subscription
 
+表示订阅链的订阅关系.Subscriber 通过 Subscriber#onSubscribe 下发的 Subscription .通过 Subscription#cancel 可以取消订阅关系.通过 Subscription#request 消费者可以协调生产者的生产速率(如果生产者支持的话).
+
 ### Processor
+
+同时继承了 Subscriber/Publisher,既是生产者也是消费者.
 
 ## rxjava 基础组件简介
 
@@ -1258,6 +1283,16 @@ public class CreateObservable {
 
 ![rxjava 事件流](rxjavaimg/rxjava事件流概括.png)
 ![rxjava 订阅流程](rxjavaimg/rxjava订阅执行流程.png)
+
+![Map示意图](rxjavaimg/map.jpg)
+
+![FlatMap 示意图](rxjavaimg/flatmap.jpg)
+
+图中的 OnSubscribe 为 rxjava1 的遗留概念,rxjava2 中不存在.对应的功能被合并进入了 Observable#subscribeActual.有兴趣的可以对比一下 rxjava1 rxjava2 中 Observable#just 操作附的实现.
+
+![Observable#map](https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/map.png)
+
+![Observable#flatMap](https://raw.githubusercontent.com/wiki/ReactiveX/RxJava/images/rx-operators/flatMap.png)
 
 ### Subscription/Disposable(订阅/订阅关系)
 
@@ -1535,7 +1570,9 @@ rxjava2 和 rxjava3 中则不再使用 Operator 实现内置的操作符语义.�
 
 rxjava1 遗留的概念,用于消费者协调生产者的生产效率,解决背压问题. rxjava2 中只有 Flowable 流中存在对应的概念.但是已经不是像 rxjava1 中使用自己定义的 Producer 而是使用 org.reactivestreams 规范中定义的 Subscription 接口.
 
-### RxJavaHook 机制
+### RxJavaHooks/RxJavaPlugins 机制
+
+人工提供的切面,可以在事件下发,onError回调,线程调度提供了一个监控和替换的切面.
 
 ### 响应式编程的定义/实现
 
