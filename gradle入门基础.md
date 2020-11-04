@@ -9,7 +9,7 @@ maven: netty,apache 自家项目
 
 ### SourceSet（输入）
 
-不同的 SourceSet 目录可以配置不同的 Source 依赖，该特性有利于在同一个项目中将不同的 SourceSet 依赖进行隔离(sourceSetImplementation,sourceSetApi)。
+不同的 SourceSet 目录可以配置不同的 Source 依赖，该特性有利于在同一个项目中将不同的 SourceSet 依赖进行隔离(< sourceSet > Implementation,< sourceSet >Api)。
 
 ### Dependency（外部依赖）
 
@@ -19,7 +19,7 @@ maven: netty,apache 自家项目
 
 不同的 SourceSet 可以配置不同的依赖（在创建新的 SourceSet 时，gradle 也会随之为其创建不同的 Configuration 用来为其进行不同的依赖配置)
 
-implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的默认 jar 任务只会打包当前项目的代码进入jar,而不会将依赖的项目打包进入jar,但是如果使用 assmbleDist,installDist,distTar,distZip 任务，运行时的依赖jar会和项目生成的jar 共同加入生成的zip文件中,并且生成运行脚本，提供给用户直接通过脚本运行jar程序。如果需要将依赖的jar文件通过jar任务打包进入同一个jar文件包中则需要配置 fatJar 任务，即将 runtimeClasspath 配置中依赖的jar包解压，提供给 Jar 任务重新压缩进入新生成jar包中。
+implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的默认 jar 任务只会打包当前项目的代码进入jar,而不会将依赖的项目打包进入jar,但是如果使用 assembleDist,installDist,distTar,distZip 任务，运行时的依赖jar会和项目生成的jar 共同加入生成的zip文件中,并且生成运行脚本，提供给用户直接通过脚本运行jar程序。如果需要将依赖的jar文件通过jar任务打包进入同一个jar文件包中则需要配置 fatJar 任务，即将 runtimeClasspath 配置中依赖的jar包解压，提供给 Jar 任务重新压缩进入新生成jar包中。
 
 依赖种类：
 
@@ -221,9 +221,9 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
   buildConfigName:构建指定 configuration 中配置的 artifact 产品
   uploadConfigName:构建并上传指定 Configuration 中配置的 Artifact 产品。
 
-  主要提供 compileJava（JavaCompile）,processResources（Copy),classes(聚合任务,依赖于前面两个任务),compileTestJava（JavaCompile）,processTestResources(Copy),testClasses,jar（Jar 任务依赖于 classes 任务主要用于输出 jar 文件）javadoc(JavaDoc,依赖于 classes 任务，生成javadoc 文档)，test(Test,依赖 testClasses 任务，通过Junit,TestNG 执行单测试)，uploadArchives（Upload，上传 archives 配置的 Artifact 进入指定的 Repository),clean(Delete 任务，删除build 目录下的文件)，*cleanTaskName(删除指定task名称的输出文件，如 cleanJar,则是删除 jar 任务的输出文件 jar包)
+  主要提供 compileJava（JavaCompile）,processResources（Copy),classes(聚合任务,依赖于前面两个任务),compileTestJava（JavaCompile）,processTestResources(Copy),testClasses,jar（Jar 任务依赖于 classes 任务主要用于输出 jar 文件）javadoc(JavaDoc,依赖于 classes 任务，生成javadoc 文档)，test(Test,依赖 testClasses 任务，通过Junit,TestNG 执行单测试)，uploadArchives（Upload，上传 archives 配置的 Artifact 进入指定的 Repository),clean(Delete 任务，删除build 目录下的文件)，*clean< TaskName >(删除指定task名称的输出文件，如 cleanJar,则是删除 jar 任务的输出文件 jar包)*
 
-  对于一个Project 有不同的 SourceSet，可以分别使用 compileSourceSetJava，processSourceSetResources，SourceSetClasses 用于分别编译资源文件，java 文件或者一起编译资源文件java文件。(不同 SourceSet 的命名规则，除 main 之外，采用 动词:compile,process sourceSet 名称，任务处理文件类型的方式进行命名 )
+  对于一个Project 有不同的 SourceSet，可以分别使用 compile< SourceSet >Java，process< SourceSet >Resources，< SourceSet > Classes 用于分别编译资源文件，java 文件或者一起编译资源文件java文件。(不同 SourceSet 的命名规则，除 main 之外，采用 动词:compile,process sourceSet 名称，任务处理文件类型的方式进行命名 )
 
   通过 java 扩展名称添加了 JavaPluginConvention ，通过 sourceSets 扩展名称添加了 SourceSetContainer 配置该插件可以配置的属性，如：添加SourceSet,修改 SourceCompatibility 和 TargetCompatibility 等。
 
@@ -235,7 +235,7 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
   
   该插件是为 java,maven 仓库上传插件所提供的基础插件任务。提供一些上传maven仓库，构建特定依赖的组件，归档项目产出的任务。
 
-  添加创建 buildTaskName 名称的 Task 规则（即向 Project 的 TaskContainer 添加 BuildConfigurationRule 规则,用于构建指定的 Configuration)。uploadxxx 对应 UploadRule 规则(用于使用 Upload 类型的 Task 上传指定的 Configuration)。
+  添加创建 build< TaskName >名称的 Task 规则（即向 Project 的 TaskContainer 添加 BuildConfigurationRule 规则,用于构建指定的 Configuration)。uploadxxx 对应 UploadRule 规则(用于使用 Upload 类型的 Task 上传指定的 Configuration)。
 
   提供了原始的名称为 uploadArchives 类型为 Upload 的上传任务。(*目前该Task 只提供上传 ivy 仓库的功能，上传 maven 仓库的功能由 MavenPlugin/MavenPublishPlugin 插件替代*)
 
@@ -319,7 +319,7 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 只负责上传任务的配置。（配置上传到哪几个 maven,哪几个 ivy 仓库。需要上传哪个 configuration 中的内容）。真实的上传任务交由 ArtifactPublisher 去进行。其再通过识别不同的仓库再交由不同的仓库类型实现的 ModuleVersionPublisher 进行最终的上传任务。
 
 通过 RepositoryHandler 创建的每一个 maven,ivy 仓库均具有上传组件的功能。该处配置 repo 和 Project#repositories 是存在区别的.
-Project#repositories 只用于下载操作,该处配置的 repositories 则只用于上传操作.
+Project#repositories 只用于下载操作,该处配置的 repositories 则只用于上传操作.(即 Project 中存在一个 repositories 操作,Upload 中也存在一个 repositories 操作,其分别具有不同的功能)
 
 默认的 archives Configuration 聚合了其他的 Configuration 中的 Artifact 组件功能.
 

@@ -66,7 +66,7 @@
 
   详细了解其使用java注解API以及框架内部实现原理，动态代理实现策略
 
-- rxjava1/rxjava2
+- rxjava1/rxjava2/rxjava3
   
   阅读源码，知道实现策略。抽象规范。版本差别
 
@@ -86,6 +86,10 @@
   
   用于按照模板生成代码.
 
+- Rhino
+
+Rhino <https://github.com/mozilla/rhino> Java 语言实现的 JS 执行引擎.
+
 ## TODO
 
 - 修改 ARouter or JetPack Navigation 框架 or 其他路由框架，使其支持 Fragment 的跳转。
@@ -93,4 +97,10 @@
 - 开发一种工具添加注解自动 saveInstance restoreInstance 解决不保存后台导致的字段丢失问题。方法通过 Gradle ASM Transformer 注入。
 
 - 多个 Activity引用 会存在 Activiy 不好配置，且应用全局浮窗难以实现。后台onSaveInstanceState,onRestoreInstaceState 是不好配置的。(后台进程被杀死的场景，开发者模式后台不保存 Activity的场景，手机助手清理后台的场景)
+
+## Linux 工具
+
+- SdkMan
+
+管理不同版本的jdk gradle 等 sdkman 支持的 sdk.
   

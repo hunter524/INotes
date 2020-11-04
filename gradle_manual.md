@@ -56,9 +56,9 @@
   systemProp,-D 属性会同时配置在 System#Properties 和 project.extensions.extraProperties.properties 上，前者上去除 前缀，后者携带前缀。
   
   Projects属性设置:
-  配置服务端机器环境变量: ORG_GRADLE_PROJECT_<prop>=<somevalue> 
+  配置服务端机器环境变量: ORG_GRADLE_PROJECT_< prop >=< somevalue >
   命令行：添加 -Pkey=value
-  gradle.properties添加属性：org.gradle.project.<key>=<value>
+  gradle.properties添加属性：org.gradle.project.< key >=< value >
 
   属性配置对于JVM分类：gradle 的client端参数配置(实际上并没有必要配置该端参数，该端主要用于启动任务和输出日志),gradle 的 Daemon 端参数配置(主要的构建任务执行端)。
   配置的属性分类：
@@ -732,7 +732,7 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 
   具体执行 publish 到远程仓库的任务。
 
-## 软件组建
+## 软件组成
 
 - Moudule
 
@@ -752,7 +752,7 @@ publish 为所有 publis<publicatin_name>PublicationTo<Repo——Name>Repository
 
 - Publication
 
-  由一系列的 Artifact 组成，用于发布的对象。Publication 有 maven,ivy 仓库不同导致产出的不同。
+  由一系列的 Artifact 组成，用于发布的对象。Publication 有 maven,ivy 仓库不同导致产出的不同(具体实现为 MavenPublication,IvyPublication) 不同 Publication 内部分别持有不同的 PublicationArtifact(具体实现分别为 IvyArtifact,MavenArtifact)
 
 ## Notation 解析
 
