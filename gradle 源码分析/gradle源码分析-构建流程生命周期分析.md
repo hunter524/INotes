@@ -8,6 +8,8 @@ LoadSettings->Configure->TaskGraph->RunTasks->Finished
 
 ### Init
 
+设置构建环境的环境变量,决定哪些项目将要参加构建.(解析 settings.gradle 文件,创建 Project 对象)
+
 ### Configuration
 
 ### Execution
