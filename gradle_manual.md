@@ -629,6 +629,7 @@ resolve/substitution 阶段会被执行两次，一次是在解析 Componnet 依
 JAVA 项目中的 Configuration 分类。
 
 - default
+  
 - api/implementation/runtimeOnly/compileOnly
   
   gradle 3.4 后新提供的四种依赖分类。
