@@ -33,7 +33,7 @@ implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的�
 
 - compile(Deprecated)
 
-  老的不区分 api,implementation 的依赖方式。现在已经被废弃。
+  老的不区分 api,implementation 的依赖方式。现在已经被废弃。以当前项目为视角 api 为当前项目向外提供的 api 接口,implementation 为当前项目的内部实现不向外提供 api 调用.
 
 - compileOnly/provided(deprecated 等同于 compileOnly)
   
@@ -76,6 +76,14 @@ implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的�
 ### setting.gradle/setting.gradle.kts（gradle构建的项目组成）
 
 ### build.gradle/build.gradle.kts（gradle 构建项目配置）
+
+## gradle.properties(为当前 gradle 构建项目配置属性值)
+
+文件中以 systemProp. 开头的属性会被添加进入 System#Properties 属性中.
+
+## local.properties
+
+记录本地的配置信息,如个人的帐号/密码信息.不能导入 VCS
 
 ### 编写构建脚本的语言
 
@@ -213,13 +221,18 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 
   JavaPlugin 插件的生命周期任务则是通过该插件提供的。主要提供了以下Task:
 
-  assemble:聚合任务，依赖于 jar 任务，打包所有 artifact 在 archive 的配置中。
+  compileJava:编译java源码文件
+  processResources:编译资源文件(实质为 Copy 认为 Copy src/< SourceSet >/resources  资源文件进入 /build/resources/< SourceSet > 目录)
+  classes: 依赖 compileJava,processResources 任务
+  assemble:聚合任务，依赖于 jar 任务，打包所有 artifact 在 archive 的配置中,也依赖 distTar,distZip,startScripts 等任务(视插件的依赖情况决定)。
   check:聚合任务，依赖于各种 test ,进行代码的单元测试和校验。
   build:聚合任务，依赖于 check 和 assemble 任务，进行项目的完整构建。
   buildNeeded:构建和测试当前项目以及所依赖的项目
   buildDependents:构建和测试当前项目以及依赖当前项目的项目
   buildConfigName:构建指定 configuration 中配置的 artifact 产品
   uploadConfigName:构建并上传指定 Configuration 中配置的 Artifact 产品。
+
+  *可以通过前面提到的 gradle < taskName > -m 不运行 task 只显示 task的依赖和实际的 task 执行顺序*
 
   主要提供 compileJava（JavaCompile）,processResources（Copy),classes(聚合任务,依赖于前面两个任务),compileTestJava（JavaCompile）,processTestResources(Copy),testClasses,jar（Jar 任务依赖于 classes 任务主要用于输出 jar 文件）javadoc(JavaDoc,依赖于 classes 任务，生成javadoc 文档)，test(Test,依赖 testClasses 任务，通过Junit,TestNG 执行单测试)，uploadArchives（Upload，上传 archives 配置的 Artifact 进入指定的 Repository),clean(Delete 任务，删除build 目录下的文件)，*clean< TaskName >(删除指定task名称的输出文件，如 cleanJar,则是删除 jar 任务的输出文件 jar包)*
 

@@ -5,18 +5,41 @@
 - gradle
   
   不带有任何命令行参数，其会触发初始化，配置阶段，然后执行配置的 Project#defaultTasks 配置的默认task.
+
+- gradle clean/check/assemble/build
+
+  四个常用的生命周期任务:
+
+  - clean
+
+    执行构建任务输出的中间文件的清理工作.
+
+  - check
+
+    执行各种 test 任务.
+
+  - assemble
+
+    构建当前项目执行如 class,processResource 等任务.
+
+  - build
+
+    聚合 check/assemble
   
 - gradle wrapper
   任务可以更新 gradle/wrapper 下面的wrapper至当前gradle版本。gradle-wrapper-x.x.x.jar 为存储在当前 GRADLE_HOME/lib 目录下面，
   gradle wrapper 任务只是将其复制进入 gradle/wrapper 目录下。
 
+  gradle wrapper 任务可以自定义配置的参数可以使用 gradle help --task wrapper 命令查看.
+
 - gradle init
 
-  初始化创建 gradle 项目。
+  初始化创建 gradle 项目。multi 项目可以通过多次创建单个项目,然后在父项目 setting.gradle 包含该项目则可以实现多项目目录结构.
 
 - gradle help
 
-   查看默认的 gradle 帮助选项。gradle help --task <task_name> 查看指定 task_name 的可选配置参数选项。
+   查看默认的 gradle 帮助选项。gradle help --task < task_name > 查看指定 task_name 的可选配置参数选项。
+
    如 gradle help --task init  则为查看 init 任务可选的配置参数。会列出 --dsl --package -- project-name 等参数用于配置项目的构建。
 
 - gradle projects
@@ -41,15 +64,14 @@
   展示通过 gradle.properties 设置的所有属性，该属性是针对 build 脚本设置的，也可以使用 gradle 命令: gradle -Pkey=value 设置该脚本属性。与之相对应的
   则存在一个虚拟机属性，需要使用 gradle -Dkey=value
 
-- gradle init
-  初始化 Gradle 项目。
-
 - gradle -Dkey=value/gradle -Pkey=value
    D 设置的是系统配置参数，P 设置的是项目的配置参数。
    -D 对应 gradle.properties 文件的 systemProp 前缀。
    java -Dkey=value 也可以用于设置 JVM 系统属性。
 
   -Dorg.gradle.debug=true 该属性可以用于调试 gradle daemon 构建进程,DefaultDaemonStarter 类中有识别该参数。（该进程负责 gradle 项目构建任务的执行，并且可以在特定条件下复用，用于构建任务的执行，其入口函数为 GradleDaemon#main。但是无法调试 gradle 命令启动进程，如果需要调试 gradle 命令启动进程需要在 gradle ，gradlew 脚本执行 gradlexxx.jar 时携带 JVM 调试参数 : -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 。
+
+  *例如:需要调试 buildSrc 项目中的 Task,Plugin 只需要执行 gradle < taskName > -Dorg.gradle.debug=true,然后 attach debug 进入本地 5005 端口即可以在 buildSrc 项目中添加断点进行调试,对应的也可以调试对应gradle中的源码,同样也可以调试 gradle 的kts构建脚本,但是目前实践不能很好的查看变量*
 
   属性配置的优先级：命令行->systemProp(gradle.properties,可以放置在 gradle 安装目录，项目根目录，gradle_user_home目录 目录优先级从低到高排序)->gradle prop (配置在 gradle.properties 中以 org.gradle.xxx.xxx=xxxx形式的属性)->env (全大写的属性名称，如 GRADLE_OPTS,GRADLE_USER_HOME,JAVA_HOME)
 
@@ -64,13 +86,15 @@
   配置的属性分类：
   系统的属性：gradle.properties
 
-- gradle  <task_name> -m/gradle  <task_name> --dry-run
+- gradle  < task_name > -m/gradle  < task_name > --dry-run
 
    不执行指定任务，只输出执行该 task 需要被执行的 task 任务列表
 
-- gradle <task_name> --scan/-- profile
+- gradle < task_name > --scan/-- profile
   
    用于分析构建任务的耗时，依赖 等。--scan 需要借助 gradle 的平台查看更加详细。-- profile 只能查看简单的各个流程和任务的耗时，无法提供更细致的内容。
+
+   *在将 maven 项目切换成 gradle 项目时也推荐先用 maven 运行 scan 然后再切换成 gradle 运行 scan 与之对比找出差距. maven 运行scan 则依赖于 gradle-enterprise-maven-extension 插件,该 maven 插件是由 gradle 项目组维护的*
 
 - --build-cache
   
@@ -87,6 +111,10 @@
 - gradle --continue <task_name> <task_name>
   
   当前面的 Task 任务运行失败之后后面的 task 任务继续运行.
+
+- gradle --console=(plain,auto(default),rich,verbose)
+
+可以设置日志显示级别,gradle 运行的所有日志存储在 GRADLE_USER_HOME/daemon/< gradle-version >/ 该目录下的文件按照 gradle daemon 进程的进程号进行存储.使用 tail -f < filename > 可以跟踪每一个 Daemon 进程的执行状态.
 
 ## gradle 插件的编写/引用
 
