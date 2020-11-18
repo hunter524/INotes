@@ -34,7 +34,11 @@
 
 - gradle init
 
+  init 这个 task 是由 BuildInitPlugin 内置的插件添加的类型为 InitBuild 的任务.
+  
   初始化创建 gradle 项目。multi 项目可以通过多次创建单个项目,然后在父项目 setting.gradle 包含该项目则可以实现多项目目录结构.
+
+  *gradle init 任务如果在 maven 项目,目录下运行,则会识别 pom.xml 自动生成对应的 setting.gradle build.gradle,目前没有找到将 groovy 的 gradle脚本转换成 kts 脚本的工具,但是官方提供了转换的指引文档*
 
 - gradle help
 
@@ -65,15 +69,16 @@
   则存在一个虚拟机属性，需要使用 gradle -Dkey=value
 
 - gradle -Dkey=value/gradle -Pkey=value
-   D 设置的是系统配置参数，P 设置的是项目的配置参数。
-   -D 对应 gradle.properties 文件的 systemProp 前缀。
+   -D 设置的是系统配置参数，-P 设置的是项目的配置参数。
+   -D 对应 gradle.properties 文件的 systemProp 前缀。-P 对应 org.gradle. 前缀表示项目的属性.
+   -D,-P 只能应用在命令行参数中, systemProp,org.gradle 前缀只能应用在 gradle.properties 配置文件中.
    java -Dkey=value 也可以用于设置 JVM 系统属性。
 
   -Dorg.gradle.debug=true 该属性可以用于调试 gradle daemon 构建进程,DefaultDaemonStarter 类中有识别该参数。（该进程负责 gradle 项目构建任务的执行，并且可以在特定条件下复用，用于构建任务的执行，其入口函数为 GradleDaemon#main。但是无法调试 gradle 命令启动进程，如果需要调试 gradle 命令启动进程需要在 gradle ，gradlew 脚本执行 gradlexxx.jar 时携带 JVM 调试参数 : -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 。
 
   *例如:需要调试 buildSrc 项目中的 Task,Plugin 只需要执行 gradle < taskName > -Dorg.gradle.debug=true,然后 attach debug 进入本地 5005 端口即可以在 buildSrc 项目中添加断点进行调试,对应的也可以调试对应gradle中的源码,同样也可以调试 gradle 的kts构建脚本,但是目前实践不能很好的查看变量*
 
-  属性配置的优先级：命令行->systemProp(gradle.properties,可以放置在 gradle 安装目录，项目根目录，gradle_user_home目录 目录优先级从低到高排序)->gradle prop (配置在 gradle.properties 中以 org.gradle.xxx.xxx=xxxx形式的属性)->env (全大写的属性名称，如 GRADLE_OPTS,GRADLE_USER_HOME,JAVA_HOME)
+  属性配置的优先级：命令行->systemProp(gradle.properties,可以放置在 gradle 安装目录，项目根目录，gradle_user_home目录 目录优先级从低到高排序)->gradle prop (配置在 gradle.properties 中以 org.gradle.xxx.xxx=xxxx形式的属性)->env (全大写的属性名称，如 GRADLE_OPTS,GRADLE_USER_HOME,JAVA_HOME,配置的环境变量不会进入 System#env 属性中)
 
   systemProp,-D 属性会同时配置在 System#Properties 和 project.extensions.extraProperties.properties 上，前者上去除 前缀，后者携带前缀。
   
@@ -94,7 +99,7 @@
   
    用于分析构建任务的耗时，依赖 等。--scan 需要借助 gradle 的平台查看更加详细。-- profile 只能查看简单的各个流程和任务的耗时，无法提供更细致的内容。
 
-   *在将 maven 项目切换成 gradle 项目时也推荐先用 maven 运行 scan 然后再切换成 gradle 运行 scan 与之对比找出差距. maven 运行scan 则依赖于 gradle-enterprise-maven-extension 插件,该 maven 插件是由 gradle 项目组维护的*
+   *在将 maven 项目切换成 gradle 项目时也推荐先用 maven 运行 scan 然后再切换成 gradle 运行 scan 与之对比找出差距. maven 运行scan 则依赖于 gradle-enterprise-maven-extension 插件,该 maven 插件是由 gradle 项目组维护的 <https://github.com/gradle/maven-build-scan-quickstart> 在该示例项目中则引用的是 maven-surefire-plugin 插件完成build scan 功能*
 
 - --build-cache
   
@@ -912,7 +917,8 @@ List< Map < String,Value> > ==> List< Value > ==> Set< Value >
 
 - JavaPlatformPlugin（org.gradle.java-platform.properties,kotlin 简短名称：java-platform
 
-  用于 构建 maven 的 bom 文件，用于协调相同平台下不同依赖的版本一致性。不同库的版本对齐。
+  用于 构建 maven 的 bom 文件，用于协调相同平台下不同依赖的版本一致性。不同库的版本对齐。功能等同于 maven dependencyManagement.
+  *可以在多项目Project下建立一个项目依赖于*
 
 - JavaLibraryDistributionPlugin(org.gradle.java-library-distribution.properties ,kotlin 简短名称:java-library-distribution )
   
@@ -984,6 +990,14 @@ List< Map < String,Value> > ==> List< Value > ==> Set< Value >
 
 ### java 项目编译过程中的 task
 
+- Copy
+
+  可以通过 CopySpec#expand ContentFilterable#expand 进行配置,替换文件中的
+  GString 模式: $year
+  JSP 模式 <%= month %>
+  Gstring 的表达式模式:${day ? "day" : "noday" }
+  expand 操作本质上使用的是 [Groovy SimpleTemplateEngine]<https://docs.groovy-lang.org/latest/html/api/groovy/text/SimpleTemplateEngine.html> 简单字符串模板引擎进行字符串的替换操作.
+
 - JavaCompile
   
   在 JavaBasePlugin#configureSourceSetDefaults 方法中创建。可以通过该 Task 的 CompileOptions 对 java 文件的编译过程进行编译参数的配置。
@@ -992,6 +1006,8 @@ List< Map < String,Value> > ==> List< Value > ==> Set< Value >
   TODO:// 自己写一个 APT 插件进行生成代码操作。
 
 - ProcessResources
+
+  处理资源文件的任务通过 CopySpec 进行配置.具体使用参考 Copy Task 该 Task 只是在 Copy Task 上添加了输出文件的记录和清理工作.
 
 - Javadoc
 - Classes

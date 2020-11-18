@@ -4,7 +4,11 @@
 
 ## gradle -P 属性
 
-## Project#ext属性
+## 环境变量/系统属性/Project#ext/Task#ext
+
+### Project#ext属性
+
+### Task#ext属性
 
 ## ExtensionAware
 

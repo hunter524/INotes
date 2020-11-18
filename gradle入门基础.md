@@ -13,6 +13,12 @@ maven: netty,apache 自家项目
 
 ### Dependency（外部依赖）
 
+依赖主要有三个概念:依赖仓库,依赖声明方式,依赖应用的范围.
+
+maven 对依赖声明称为:groupId,artifactId,version
+gradle 对依赖声明称为: group,module,version
+二者的定义本质上是相同的东西.
+
 依赖是通过 Project#dependencies 闭包，通过 DependencyHandler 配置进入 Configuration中的。不同类型的依赖（api,implementation 等)
 
 其中 compileOnly,implementation 依赖会聚合成为 compileClasspath 配置，提供给 compileJava 任务使用。
@@ -29,7 +35,8 @@ implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的�
 
 - api
 
-  依赖直接向外暴露的依赖。(*在 JavaLibraryPlugin 中使 api 依赖继承了 compile 依赖*) api 的配置是在 JavaLibraryPlugin 中添加的。
+  依赖直接向外暴露的依赖。(*在 JavaLibraryPlugin 中使 api 依赖继承了 compile 依赖*) api 的配置是在 JavaLibraryPlugin 中添加的。*没有引用 JavaLibrary 插件则无法使用该配置,但是一般的java项目都必须依赖 JavaLibrary 项目.*
+  有些项目只单独运行只添加了 JavaPlugin 插件则无法使用 api 配置依赖,但是该项目依旧可以被单独打包成为 jar 包.与其他 JavaLibrary 项目并没有太大差别.
 
 - compile(Deprecated)
 
@@ -59,13 +66,32 @@ implementation,runtimeOnly,runtime 会聚合成为 runtimeClasspath,gradle 的�
 
   用于定义向依赖者暴露的当前项目内部的元素，暴露的这些元素只用于项目的运行时提供。继承自 implementation,runtimeOnly,runtime.*default 默认配置继承自 runtimeElements,其他项目依赖 Project 默认依赖的是 default 的 Configuration.但是该处的 mplementation,runtimeOnly,runtime 配置的 Visible 属性均为 false 因此无法对外部的其他项目暴露其内部实现*
 
+- import(Maven 特有的依赖)
+
+依赖的库只有 pom 文件,称之 BOM(Bill Of Materials).该文件定义了依赖的版本号.在 gradle 中则使用 api/implementation 依赖该依赖即可.
+
 依赖解析策略：依赖替换，平台依赖，依赖版本，依赖限制
 依赖缓存
 依赖策略：编译时依赖（compileOnly)，运行时依赖(runtimeOnly),编译时和运行时共同依赖（implementation,api)
+组件平台包依赖: BOMs 文件依赖(对应 maven 构建中的 dependencyManagement tag). 限制一系列的平台相关的内部组件库的版本. 依赖于 JavaPlatform 插件. 依赖方使用特殊 implementation platform,implementation enforcedplatform 标记该依赖模式是对 Bom 类型的 Pom 文件依赖.*依赖在 BOM pom 中限定了版本的依赖,再依赖该依赖则不需要指定版本.*
 
 ### Repository（外部依赖仓库，外部依赖来源）
 
-仓库类型：maven,ivy,本地文件。
+仓库类型：
+
+- maven
+  
+  maven 依赖用户可以配置本地 maven仓库的url,google maven 仓库的url,apache maven 仓库的 url,jcenter 仓库的 url,gradle 仓库的url,android 仓库的 url等等.
+
+  官方使用手册提到避免使用 mavenLocal 依赖.(即 USER_HOME/.m2/repository 目录下的 maven 模式文件结果的本地缓存的 maven 仓库)
+
+- ivy
+
+  老的 ivy 构建工具的仓库管理工具.
+
+- 本地文件
+
+  本地文件依赖分为直接依赖单个文件 api filetree 模式 和 flatdir 模式,将这个目录当作本地仓库进行依赖.
 
 ### Artifact（产品,输出）
 
@@ -223,9 +249,11 @@ plugin的id名称和kotlin脚本中的简写名称参见 gradle_manual.md 的 *�
 
   compileJava:编译java源码文件
   processResources:编译资源文件(实质为 Copy 认为 Copy src/< SourceSet >/resources  资源文件进入 /build/resources/< SourceSet > 目录)
-  classes: 依赖 compileJava,processResources 任务
-  assemble:聚合任务，依赖于 jar 任务，打包所有 artifact 在 archive 的配置中,也依赖 distTar,distZip,startScripts 等任务(视插件的依赖情况决定)。
-  check:聚合任务，依赖于各种 test ,进行代码的单元测试和校验。
+  classes: 依赖 compileJava,processResources 任务 -> 对应 maven 的 compile
+  clean:Delete 类型任务,清理 Project#build 目录 -> 对应 maven 的 clean 任务
+  assemble:聚合任务，依赖于 jar 任务，打包所有 artifact 在 archive 的配置中,也依赖 distTar,distZip,startScripts 等任务(视插件的依赖情况决定)。-> 对应 maven 的 package 任务 (*相同的项目在一行代码未改的情况下,运行上述任务 gradle 的耗时明显低于 mvn*)
+  test: JavaPlugin 插件提供的,用以运行 test 代码 -> 对应maven 中的 test.
+  check:聚合任务，依赖于各种 test ,进行代码的单元测试和校验。 -> 对应 maven 的 verify 任务.
   build:聚合任务，依赖于 check 和 assemble 任务，进行项目的完整构建。
   buildNeeded:构建和测试当前项目以及所依赖的项目
   buildDependents:构建和测试当前项目以及依赖当前项目的项目
