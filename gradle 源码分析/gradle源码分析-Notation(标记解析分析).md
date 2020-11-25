@@ -6,6 +6,10 @@
 
 - 对于 DependencyHandler 传递进入 Object/String 进行依赖的解析
 
+- 文件目录/文件标记解析 FileResolver#asNotationParser
+
 ## NotationParser
 
 ## NotationConverter
+
+- PathNotationConverter
