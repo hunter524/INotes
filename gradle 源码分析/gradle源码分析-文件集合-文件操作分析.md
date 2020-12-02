@@ -6,6 +6,12 @@
 
 ## FileCollection/FileTree
 
+### DefaultConfigurableFileCollection
+
+### CompositeFileCollection
+
+### DefaultCompositeFileTree/CompositeFileTree
+
 ## Project#files
 
 ## Project#fileTree/Project#tarTree/Project#zipTree
@@ -138,4 +144,17 @@ CopySpec 可以进行多层嵌套的定义(如:目录文件夹一个结构)
 
 ### SingleParentCopySpec
 
-继承自　DefaultCopySpec．表示只有一个父目录的　CopySpec 用于在　DefaultCopySpec／SingleParentCopySpec　添加子　CopySpec 时使用．
+继承自　DefaultCopySpec．表示只有一个父目录的　CopySpec 用于在　DefaultCopySpec ／ SingleParentCopySpec　添加子　CopySpec 时使用．*Todo:// 目前并没有发现该处的 DefaultCopySpec与SingleParentCopySpec定义的不同之处*
+
+## CopySpecResolver
+
+用以耦合(解析) 对应的 CopySpec　形成　FileTree 提供给　CopyAction 进行文件的　copy,zip,tar...等等操作．该处的耦合是通过　CopySpecBackedCopyActionProcessingStream＃process　和　CopySpecInternal＃walk　进行解析和操作的．
+*在解析　CopySpec 成为　FileTree 的过程中也进行了对应的　PatternSet 匹配规则的应用，用于过滤和包含相应的文件*
+
+## PatternFilterable/PatternSet
+
+模式匹配接口,用于定义 include,exclude 规则.*TOOD:// 查找在 FileTree/FileCollection 中结合该模式匹配所进行的文件规则过滤操作*
+
+## FileCopyDetails/DefaultFileCopyDetails
+
+执行最终的文件复制任务以及文件复制过程中的文件内容过滤/替换操作等.同时在执行 CopyFileVisitorImpl#processFile 时会遍历 CopySpecResolver 即 CopySpec 中的 CopyActions 从而对 FileCopyDetails 进行配置操作(如:rename 操作即在该处进行,替换 FileCopyDetails 对象中的目标文件的名称)

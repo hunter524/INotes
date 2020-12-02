@@ -90,6 +90,26 @@
 
 Rhino <https://github.com/mozilla/rhino> Java 语言实现的 JS 执行引擎.
 
+## Gradle Plugin
+
+- shadow <https://github.com/johnrengelman/shadow>
+
+类似于 google 的 jarjar 工具.提供打包依赖 jar 重新定义包名,避免冲突/对第三方库的依赖.(使第三方库改个包名,作为自己jar的一部分),制作 fat/uber jar.
+
+## 代码检查工具
+
+- JaCoCo
+
+代码测试覆盖率
+
+- Pmd/FindBugs/CheckStyle/CodeNarcPlugin/Sonar/Infer
+
+常规 java 代码分析检查工具
+
+- Lint
+
+Android 内置的代码检查分析工具
+
 ## TODO
 
 - 修改 ARouter or JetPack Navigation 框架 or 其他路由框架，使其支持 Fragment 的跳转。
