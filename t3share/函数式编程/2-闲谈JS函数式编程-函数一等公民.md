@@ -22,8 +22,13 @@
 
 函数是"一等公民"：函数优先，和其他数据类型一样。
 只用"表达式"，不用"语句"：通过表达式（expression）计算过程得到一个返回值，而不是通过一个语句（statement）修改某一个状态。
-无副作用：不污染变量，同一个输入永远得到同一个数据。
-不可变性：前面一提到，不修改变量，返回一个新的值。
+
+- 无副作用：不污染变量，同一个输入永远得到同一个数据。
+  
+  也可以理解为 stateless ,函数不维护任何状态。函数式编程的核心精神是 stateless，简而言之就是它不能存在状态，也不能改变和依赖外部的状态.因此称为无状态,正是因为无状态才可以保证同一个输入得到同一个输出.
+
+- 不可变性：输入数据是不能动的，动了输入数据就有危险，所以要返回新的数据集,同时新的数据集也需要保证不可变性。(同时不可变性也是对无副作用的一种保证,不动输入参数则保证了不改变外部状态,返回不可变的数据则可以保证函数式编程的这两个特性的传递)
+  
 由于变量值是不可变的，对于值的操作并不是修改原来的值，而是修改新产生的值，原来的值保持不便。 通常来说，算法都有递推（iterative）和递归（recursive）两种定义。
 
 由于变量不可变，纯函数编程语言无法实现循环，这是因为For循环使用可变的状态作为计数器，而While循环或DoWhile循环需要可变的状态作为跳出循环的条件。因此在函数式语言里就只能使用递归来解决迭代问题，这使得函数式编程严重依赖递归
@@ -54,8 +59,109 @@
 
 调试查错方面，因为FP程序中的错误不依赖于之前运行过的不相关的代码。而在一个指令式程序中，一个bug可能有时能重现而有些时候又不能。因为这些函数的运行依赖于某些外部状态， 而这些外部状态又需要由某些与这个bug完全不相关的代码通过某个特别的执行流程才能修改。在FP中这种情况完全不存在：如果一个函数的返回值出错了，它一直都会出错，无论你之前运行了什么代码。而整个程序就是函数接龙。
 
+## 一个简单的例子
+
+我们从一个愚蠢的例子开始。下面是一个海鸥程序，鸟群合并则变成了一个更大的鸟群，繁殖则增加了鸟群的数量，增加的数量就是它们繁殖出来的海鸥的数量。注意这个程序并不是面向对象的良好实践，它只是强调当前这种变量赋值方式的一些弊端。
+
+```js
+var Flock = function(n) {
+  this.seagulls = n;
+};
+
+Flock.prototype.conjoin = function(other) {
+  this.seagulls += other.seagulls;
+  return this;
+};
+
+Flock.prototype.breed = function(other) {
+  this.seagulls = this.seagulls * other.seagulls;
+  return this;
+};
+
+var flock_a = new Flock(4);
+var flock_b = new Flock(2);
+var flock_c = new Flock(0);
+
+var result = flock_a.conjoin(flock_c).breed(flock_b).conjoin(flock_a.breed(flock_b)).seagulls;
+//=> 32
+```
+
+我相信没人会写这样糟糕透顶的程序。代码的内部可变状态非常难以追踪，而且，最终的答案还是错的！正确答案是 16，但是因为 flock_a 在运算过程中永久地改变了，所以得出了错误的结果。这是 IT 部门混乱的表现，非常粗暴的计算方式。
+如果你看不懂这个程序，没关系，我也看不懂。重点是状态和可变值非常难以追踪，即便是在这么小的一个程序中也不例外。
+
+我们试试另一种更函数式的写法：
+
+```js
+var conjoin = function(flock_x, flock_y) { return flock_x + flock_y };
+var breed = function(flock_x, flock_y) { return flock_x * flock_y };
+
+var flock_a = 4;
+var flock_b = 2;
+var flock_c = 0;
+
+var result = conjoin(breed(flock_b, conjoin(flock_a, flock_c)), breed(flock_a, flock_b));
+//=>16
+```
+
+很好，这次我们得到了正确的答案，而且少写了很多代码。不过函数嵌套有点让人费解...（我们会在后面的组合(compose)）。这种写法也更优雅，不过代码肯定是越直白越好，所以如果我们再深入挖掘，看看这段代码究竟做了什么事，我们会发现，它不过是在进行简单的加（conjoin） 和乘（breed）运算而已。
+
+代码中的两个函数除了函数名有些特殊，其他没有任何难以理解的地方。我们把它们重命名一下，看看它们的真面目。
+
+```js
+var add = function(x, y) { return x + y };
+var multiply = function(x, y) { return x * y };
+
+var flock_a = 4;
+var flock_b = 2;
+var flock_c = 0;
+
+var result = add(multiply(flock_b, add(flock_a, flock_c)), multiply(flock_a, flock_b));
+//=>16
+```
+
+这么一来，你会发现我们不过是在运用古人早已获得的知识：
+
+```js
+// 结合律（assosiative）
+add(add(x, y), z) == add(x, add(y, z));
+
+// 交换律（commutative）
+add(x, y) == add(y, x);
+
+// 同一律（identity）
+add(x, 0) == x;
+
+// 分配律（distributive）
+multiply(x, add(y,z)) == add(multiply(x, y), multiply(x, z));
+```
+
+是的，这些经典的数学定律迟早会派上用场。不过如果你一时想不起来也没关系，多数人已经很久没复习过这些数学知识了。我们来看看能否运用这些定律简化这个海鸥小程序。
+
+```js
+// 原有代码
+add(multiply(flock_b, add(flock_a, flock_c)), multiply(flock_a, flock_b));
+
+// 应用同一律，去掉多余的加法操作（add(flock_a, flock_c) == flock_a）
+add(multiply(flock_b, flock_a), multiply(flock_a, flock_b));
+
+// 再应用分配律
+multiply(flock_b, add(flock_a, flock_a));
+```
+
+漂亮！除了调用的函数，一点多余的代码都不需要写。当然这里我们定义 add 和 multiply 是为了代码完整性，实际上并不必要——在调用之前它们肯定已经在某个类库里定义好了。
+
+你可能在想“你也太偷换概念了吧，居然举一个这么数学的例子”，或者“真实世界的应用程序比这复杂太多，不能这么简单地推理”。我之所以选择这样一个例子，是因为大多数人都知道加法和乘法，所以很容易就能理解数学可以如何为我们所用。
+
+## 一等公民的函数
+
+当我们说函数是“一等公民”的时候，我们实际上说的是它们和其他对象都一样...所以就是普通公民（坐经济舱的人？）。函数真没什么特殊的，你可以像对待任何其他数据类型一样对待它们——把它们存在数组里，当作参数传递，赋值给变量...等等。
+
+函数是 JavaScript 语言的基础概念，不过还是值得提一提的，因为在 Github 上随便一搜就能看到对这个概念的集体无视，或者也可能是无知。
+
 ## References
 
 - [闲话闭包](https://www.zhoulujun.cn/html/webfront/ECMAScript/js6/2015_0814_240.html)
   
 - [函数式编程漫谈](https://cloud.tencent.com/developer/article/1190773)
+
+- [函数式编程指北]()

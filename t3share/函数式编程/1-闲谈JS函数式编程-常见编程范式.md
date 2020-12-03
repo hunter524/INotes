@@ -1,8 +1,12 @@
-# 编程范式
+# 编程范式(Programming Paradigm)
 
 现在很多的文章和演讲都在谈架构，很少有人再会谈及编程范式。
 
 但是这些基础性和本质性的话题，却是非常非常重要的。在一些语言争论上，很多人对编程语言的认识其实并不深；另一方面，通过编程语言的范式，我们不但可以知道整个编程语言的发展史，而且还能提高自己的编程技能，进而写出更好的代码。
+
+写代码需要遵循一定的原则，就像水流湍急的时候你需要天文罗盘来指引一样。
+
+现在已经有一些通用的编程原则了，各种缩写词带领我们在编程的黑暗隧道里前行：DRY（不要重复自己，don't repeat yourself），高内聚低耦合（loose coupling high cohesion），YAGNI （你不会用到它的，You Ain’t Gonna Need It），最小意外原则（Principle of least surprise），单一责任（single responsibility）,KISS（ Keep It Simple, Stupid）原则等等。
 
 ## 常用的编程范式
 
