@@ -6,7 +6,7 @@
 
 写代码需要遵循一定的原则，就像水流湍急的时候你需要天文罗盘来指引一样。
 
-现在已经有一些通用的编程原则了，各种缩写词带领我们在编程的黑暗隧道里前行：DRY（不要重复自己，don't repeat yourself），高内聚低耦合（loose coupling high cohesion），YAGNI （你不会用到它的，You Ain’t Gonna Need It），最小意外原则（Principle of least surprise），单一责任（single responsibility）,KISS（ Keep It Simple, Stupid）原则等等。
+现在已经有一些通用的编程原则了，各种缩写词带领我们在编程的黑暗隧道里前行：DRY（不要重复自己，don't repeat yourself），高内聚低耦合（loose coupling high cohesion），YAGNI （你不会用到它的(最少依赖原则)，You Ain’t Gonna Need It）,LOD (Law of Demeter 最少知道原则)，最小意外原则（Principle of least surprise,遵循惯例,不要给别人带来意外），单一责任（single responsibility）,KISS（ Keep It Simple, Stupid,避免不必要的复杂度,引入提升复杂度之前考虑是否真的必要）原则等等。
 
 ## 常用的编程范式
 
@@ -24,7 +24,7 @@
 
 编程范式是编程语言的一种分类方式，它并不针对某种编程语言。就编程语言而言，一种语言可以适用多种编程范式。
 
-一些编程语言是专门为某种特定范式设计的，例如C语言是过程式编程语言；Smalltalk和Java是较纯粹的面向对象编程语言；Haskell是纯粹的函数式编程语言。另外一些编程语言和编程范式的关系并不一一对应，如Python，Scala，Groovy都支持面向对象和一定程度上的函数式编程。C++是多范式编程语言成功的典范。C++支持和C语言一样的过程式编程范式，同时也支持面向对象编程范式，STL（Standard Template Library）使C++具有了泛型编程能力。支持多种范式可能是C++直到现在仍然具有强大的生命力的原因之一。
+一些编程语言是专门为某种特定范式设计的，例如C语言是过程式编程语言；Smalltalk和Java是较纯粹的面向对象编程语言；Haskell是纯粹的函数式编程语言。另外一些编程语言和编程范式的关系并不一一对应，如Python，Scala，Groovy,Kotlin 都支持面向对象和一定程度上的函数式编程。C++是多范式编程语言成功的典范。C++支持和C语言一样的过程式编程范式，同时也支持面向对象编程范式，STL（Standard Template Library）使C++具有了泛型编程能力。支持多种范式可能是C++直到现在仍然具有强大的生命力的原因之一。
 
 ### 结构化编程/非结构化编程
 
@@ -222,6 +222,16 @@ FBP是一种特殊形式的数据流程编程，它基于了有界缓冲区，�
 - Web 中更新 UI
   
   指令式编程如何实现?声明式编程如何实现?
+
+## 不同编程模式对比
+
+- 结构化编程 VS 非结构化编程
+
+- OOP VS 过程式编程
+
+- 命令式编程 VS 声明式编程
+
+- OOP VS FP
 
 ## 总结
 
