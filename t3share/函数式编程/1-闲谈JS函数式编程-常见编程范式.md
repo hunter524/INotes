@@ -32,13 +32,70 @@
 非结构化程序设计被批评最严重的方面就是会产生很难读懂的代码（戏称面条式代码），在创建大型工程方面有时会被认为是很差的，不过，因为赋予程序设计者很大的自由，被人称赞为如同莫扎特在谱曲。
 非结构化程序设计语言既有高阶语言，也有低阶语言。一些语言通常被印证为非结构化语言，包括JOSS、FOCAL、TELCOMP、汇编语言、MS-DOS批处理和早期版本的BASIC、Fortran、COBOL和MUMPS。
 
+```basic
+_add_a_and_b:
+   push   %ebx
+   mov    %eax, [%esp+8]
+   mov    %ebx, [%esp+12]
+   add    %eax, %ebx
+   pop    %ebx
+   ret  
+
+_main:
+   push   3
+   push   2
+   call   _add_a_and_b
+   add    %esp, 8
+   ret
+```
+
+```basic
+ public static void main(java.lang.String[]);
+    descriptor: ([Ljava/lang/String;)V
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=3, locals=5, args_size=1
+         0: iconst_4
+         1: istore_1
+         2: iconst_2
+         3: istore_2
+         4: iload_1
+         5: iload_2
+         6: iand
+         7: istore_3
+         8: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
+        11: new           #3                  // class java/lang/StringBuilder
+        14: dup
+        15: invokespecial #4                  // Method java/lang/StringBuilder."<init>":()V
+        18: ldc           #5                  // String c:
+        20: invokevirtual #6                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        23: bipush        25
+        25: invokestatic  #7                  // Method java/lang/Integer.toHexString:(I)Ljava/lang/String;
+        28: invokevirtual #6                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        31: invokevirtual #8                  // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        34: invokevirtual #9                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+        37: ldc           #10                 // float Infinityf
+        39: fstore        4
+        41: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
+        44: new           #3                  // class java/lang/StringBuilder
+        47: dup
+        48: invokespecial #4                  // Method java/lang/StringBuilder."<init>":()V
+        51: ldc           #11                 // String Float Pos Infinite:
+        53: invokevirtual #6                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        56: fload         4
+        58: invokevirtual #12                 // Method java/lang/StringBuilder.append:(F)Ljava/lang/StringBuilder;
+        61: invokevirtual #8                  // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        64: invokevirtual #9                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+        67: return
+```
+
 一个使用非结构化语言的程序经常包含按顺序排列的命令或声明，通常每个都占用一行。每一行都有编号或者标签，这样程序中的任意行都可以被执行。
 
 非结构化程序设计引入了基本控制流的概念，比如循环、分支和跳转。尽管在非结构化模式中不存在过程，不过子程序还是可以使用的。和过程不同，子程序可能有多个入口和出口。子程序中是允许直接跳转入或跳转出的。这种灵活性可以实现协同程序，而这在过程化程序设计中是相当困难以至于不可能的。
 
 非结构化程序设计中是没有本地变量的概念的，不过标签和变量可以在有限的区域中起作用。这意味着在调用子程序时不需要上下文刷新，而所有的变量保持它们之前被调用后的值。这样，实现递归就很困难了(递归依赖于方法调用栈对局部变量,调用现场的保存)。而嵌套的深度被限制在1或2级。
 
-- 结构化编程:它采用子程序、块结构、for循环以及while循环等结构，来取代传统的 goto。希望借此来改善计算机程序的明晰性、质量以及开发时间，并且避免写出面条式代码.用任何语言都可以进行结构化编程，不过一般较常使用过程式的编程语言。早期的结构化编程语言包括ALGOL、 Pascal、PL/I及Ada，不过后来大部分的过程式编程语言都鼓励使用结构化编程，有时也会特意的省去一些特性（例如不支持goto指令）使得非结构化的编程更加困难。
+- 结构化编程:它采用子程序、块结构、for循环以及while循环等结构，来取代传统的 goto。希望借此来改善计算机程序的明晰性、质量以及开发时间，并且避免写出面条式代码.用任何语言都可以进行结构化编程，不过一般较常使用过程式的编程语言。早期的结构化编程语言包括ALGOL、 Pascal、PL/I及Ada，不过后来大部分的过程式编程语言都鼓励使用结构化编程，有时也会特意的省去一些特性（例如不支持goto指令）使得非结构化的编程更加困难。*结构化编程不再支持随意跳转到任意指令位置(代码行数)进行执行操作,*
 
 ### 过程式编程
 
@@ -163,6 +220,10 @@ Aspect-oriented programming 又译作面向方面的程序设计、剖面导向�
 不可变对象实现:
 JS: [immutable-js](https://github.com/immutable-js/immutable-js)
 JAVA: [immutables](https://github.com/immutables/immutables)
+
+Java:Stream,方法引用,函数接口
+Kotlin:对集合做了函数式扩展,方法可以作为变量
+JS: 内置了集合的函数式方法,通过 ramda,loadash 可以实现 compose,curry,memonize 功能.
 
 ## 其他的一些编程范式
 
