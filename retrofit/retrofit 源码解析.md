@@ -10,7 +10,7 @@
 
 ## Converter.Factory/CallAdapter.Factory/Converter/CallAdapter
 
-## Converter.Factory
+### Converter.Factory
 
 - Factory#requestBodyConverter
   
@@ -48,6 +48,10 @@
 
 - DefaultCallAdapterFactory
 
+## ParameterHandler
+
+
+
 ## retrofit2.Call/okhttp3.Call
 
 ### retrofit2.Call
@@ -68,6 +72,10 @@
   
   如果设置了 Retrofit#callbackExecutor 再次代理 OkHttpCall 的回调执行.*该实现类的被代理类为 OkHttpCall 目标是代理 OkHttpCall 的回调进行切换线程执行*
 
+### okhttp3.Call
+
+该接口的实现类在 okhttp3 中只有 okhttp3.RealCall ,其中 AsyncCall 并非真实的实现该接口的 Call.AsyncCall 只是作为 RealCall 的一个内部类包装了 RealCall 的异步执行逻辑,本质上 AsyncCall 是一个 Runnable 用于提交到 okhttp3 内部的线程池中执行.
+
 ## retrofit.Callback/okhttp3.Callback
 
 如同上面的 retrofit.Call 与 okhttp3.Call 的代理与被代理的关系,retrofit 使用自己的 Callback 提供给调用者使用,retrofit 真正执行时则依旧依赖于 okhttp3.Call 与 okhttp3.Callback 通过代理模式分别暴露了 retrofit.Call 和 retrofit.Callback 给使用者使用.
@@ -76,9 +84,13 @@
   
   TODO://源码层面的泛型(类型规则)传递
 
-## ServiceMethod
+## ServiceMethod/ServiceMethod#Builder
 
-- ServiceMethod#build
+- ServiceMethod#Builder#build
+
+  解析方法的注解,参数的注解,判断是否符合 HTTP 请求的规则,同时通过 Retrofit 和 注解,方法返回值类型(Call?Observable?Single?guava ListenableFuture? java CompletableFuture? 等等,retrofit 均提供了相应的 CallAdapter 的实现),@Body 注解的参数类型,方法返回值的参数化类型(gson,protobuf 等数据类型) 分别获取合适的 CallAdapter,RequestConverter,ResponseConverter,
+
+  *CallAdapter/ResponseConverter 都只能获取到方法的注解,RequestBody 则可以额外获取到@Body 标记的单个参数字段所标记的所有注解(无法获取到其他参数上标记的注解)*
 
   依次获取 CallAdapter
 
@@ -88,9 +100,18 @@
 
   判断请求方法与 MutliPart/FormUrlEncode 是否匹配
 
-  解析参数注解(因为 Body 也在参数中,因此 Body 的转换操作也在该处进行)
+  解析参数注解(因为 Body 也在参数中,因此 Body 的转换操作也在该处进行),构建与参数注解想对应的 ParameterHandler 用于在 OkhttpCall 调用 ServiceMethod#toRequest 构建 okhttp3.Request
+
+  build 结束,检查所有注解参数是否符合 Http 请求规范.
+  *请求方法注解 value 标记的 relativeUrl 和 Url注解标记的参数必须要有一个*
+  *FormUrlEncoded 注解标记的方法请求,必要要有 Field 注解标记的参数*
+  *MultiPart 注解标记的方法,必须要有 Part 注解标记的参数*
 
 - ServiceMethod#parseMethodAnnotation
+
+## RequestBuilder
+
+被 ServiceMethod 和 ParameterHandler 用以解析注解参数构建 okhttp3.Request 对象.
 
 ## 一些辅助类
 

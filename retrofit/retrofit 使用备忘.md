@@ -1,5 +1,11 @@
 # 使用备忘
 
+## Url编码/转义规则
+
+- auth 编码规则
+- path 编码规则
+- query 编码规则
+
 ## Retrofit 配置
 
 - validateEagerly
@@ -16,7 +22,9 @@ true: 即时加载,在 Rtrofit#create API 动态代理对象是,即解析 API �
 
 没有配置则使用 DefaultCallAdapterFactory 直接返回原始的 retrofit.Call
 
-Android 平台下如果使用 Call 执行默认的 callbackExecutor 为 MainThreadExecutor Call 回调在主线程.返回的适配 Retrofit.Call 的 CallAdapter.Factory 为 ExecutorCallAdapterFactory.
+    - Android 平台:使用 Call 执行默认的 callbackExecutor 为 MainThreadExecutor Call 回调在主线程.返回的适配 Retrofit.Call 的 CallAdapter.Factory 为 ExecutorCallAdapterFactory.
+
+    - Java 平台:回调默认在 OKhttp3 的请求线程池的线程执行.
 
 ## Retrofit#baseUrl 与 @Url 的配置
 
@@ -69,6 +77,9 @@ Result: http://github.com/square/retrofit/ (note the scheme stays 'http')
   注解 value 值可以传递绝对 url 与 相对 url.
 
 - @HEAD
+  
+  head 请求响应不存在 ResponseBody 因此返回值类型需要标记为 Call< Void >
+
 - @DELETE
 - @OPTIONS
   
@@ -84,20 +95,115 @@ Result: http://github.com/square/retrofit/ (note the scheme stays 'http')
 
 用于自定义 Http 的请求方法,路径,是否有 Body 也需要自己定义.
 
-## @Path,@Query,@QueryName,@Field,@Url
+## 注解分类
 
-- @Path
+### 方法注解
 
-- @Field
-- @Url
+- 请求方法注解
+  
+  DELETE
+  GET
+  HEAD
+  PATCH
+  POST
+  PUT
+  OPTIONS
+  HTTP
+  
+  上述注解表示七种请求方法类型和一种自定义请求方法的方式.同时上面的 8 种请求方法也不能重复定义在一个方法上,因为一个 Http   请求只能有一个请求方法类型.
+  
+  上述请求方法的注解 value 值,表示路径不能携带 ?{query}=value 或者 ?key={value} 的动态查询参数,动态查询参数只能使用  @Query,@QueryMap,@QueryName 动态添加查询参数.
+  
+  但是 value 值可以使用 https://host/{path1}/{path2} 结合 @Path 对路径进行动态参数修改.
 
-## GET 请求的配置
+- Headers
 
-- @Query
-- @QueryName
-- @QueryMap
+方法注解标记请求头,value 值为一个 String[] , Http Header 格式如:Cache-Control: max-age=640000,Key 的值不同 value 的值也不同.
 
-## @Multipart/@Part/@PartMap
+- Multipart
+
+方法注解标记是 Multipart 模式的 Http 请求.参数部分需要添加 @Part 注解用于标记每一部分的参数.
+
+- FormUrlEncoded
+
+方法注解标记请求参数 Body 部分需要执行 url encode 编码. 由于 multipart 请求与 from-url-encode 请求互斥因此不能同时标记在一个方法中.
+
+该注解需要结合 @Field 用于发送 form-url 请求.
+
+Multipart,FormUrlEncoded 标记的方法,请求方法必须是 @Post,@Patch,@Put 或者携带参数的 @Http 请求方法
+
+### 参数注解
+
+同一个参数上,由于 Retrofit 的实现限制,无法在同一个参数上添加多个由Retrofit 定义的注解.
+
+- Url
+  
+  参数的 @Url 注解不能和请求方法(@Post,@Put等)的 value 值共存.
+
+  @Url 注解不能重复标记两次
+
+  @Path 注解不能和 @Url 注解同用 (你都完全自定义 @Url 了为啥还要 @Path???)
+
+  @Query 注解要在 @Url 之后,同 @Path 查询参数的替换也依赖于 url 路径
+
+- Path
+
+  Query 注解要在 Path 注解 之后
+
+  Path 注解不能和 @Url 同用
+
+  使用 Path 注解是一定需要有一个相对路径 Url.(先有路径再有相对的 Url)
+
+- Query
+  
+  Query 注解的参数可以是 Iterable,Array.如果是 Iterable,Array 则值会以相同的 key 加入 Request 中.(如 文档形成 /friends?group=coworker&group=bowling 的查询参数)
+
+- QueryName
+
+  向 url 后面添加查询参数,但是只添加 key 值不再添加 value 值.使用 @Query 传递空字符串会形成.<https://www.wanandroid.com/user/register?username=&password=&repassword=>,使用 QueryName 则不会添加多余的 = 号.*= 号的添加规则是在 HttpUrl 的库中解析的*
+
+- QueryMap
+  
+  注解的参数类型 rawType 必须是 Map 及其子类.Map 的参数化类型的第一个类型必须是 String 类型.第二个类型可以是任意类型.*其javadoc 说是使用 String.valueof 但是其实使用的是 BuiltInConverters#ToStringConverter 对 value 值进行转换,本质上使用的是Object#toString 进行到字符串的转换,在基础数据和基础数据的数组类型的转换上,这两种转换成为字符串的模式可能存在差别*
+
+- Header
+  
+  Header 注解为参数注解,标记参数的 value 值为 Header 的 Key 值,参数值为 key 对应的Header 的 value 值.
+  对应一个 Headers 注解,是批量添加 Header 参数的,该 Headers 注解是添加在方法上的.
+
+- HeaderMap
+
+  与 QueryMap 对应,该处是为了可以动态添加为 Map 的 Header 值.
+
+- Field
+  
+  为 form 请求需要添加的参数的 key 和 参数作为 value 值.
+
+- FieldMap
+  
+  同 QueryMap 功能对应,该处是为了可以动态添加 Map 作为 form 值
+
+- Part
+  
+  与方法的 MultiPart 注解需要同时使用,MultiPart 标记在请求方法上,标记当前方法的Http 请求方法为 MultiPart.
+
+  *Part注解如果 value 是空则被注解的参数需要是MultipartBody#Part 类型,或者组件类型为 MultipartBody#Part 的数组或者Iterable*
+
+  *Part注解如果 value 不为空,Part 注解的参数则会通过 RequestBodyConverter 对 Part 注解的参数进行进行转换*
+
+  *Part注解如果 value 不为空,但是注解的参数类型为 MultipartBody#Part 则会抛出错误*
+
+  *如上 Part 注解无论 value 是否为空参数均可以为 Iterable,List 类型,如果 value 不为空则会以相同的注解配置,添加多个Part部分*
+
+- PartMap
+
+  同 QueryMap,key 值的类型必须为 String,用于作为 MultiPart 请求部分每个 Part 部分的名称,value 值可以为任意类型,会被通过 RequestBodyConverter 转换成为 MultiPart 部分的每个 Part 中的 RequestBody 部分.
+
+- Body
+  
+  不能与 FormUrlEncoded,MultiPart 注解同时使用,也不能一个请求方法中标记了两个 @Body 注解.FormUrlEncoded 有自己的格式的Body不需要用户提供body,MultiPart 会由多个 Part 构建形成真实的 Body.
+
+  同时对于不需要 Body 的请求方法(如:Delete,Get,Head,Option 均不需要Body,Patch,Post,Put 则需要 Body),也不能添加 @Body 注解标记的参数.(*ServiceMethod#Builder#build 时会检查相关请求配置的注解和参数是否符合 Http 请求的要求*)
 
 ## @FormUrlEncoded/@Multipart
 
