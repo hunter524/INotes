@@ -8,6 +8,10 @@
 
 ## Retrofit/Retrofit#Builder
 
+- Retrofit#Builder#build/Retrofit#newBuilder
+
+  实现 Retrofit 和 Retrofit#Builder 之间的相互转换
+
 ## Converter.Factory/CallAdapter.Factory/Converter/CallAdapter
 
 ### Converter.Factory
@@ -49,8 +53,6 @@
 - DefaultCallAdapterFactory
 
 ## ParameterHandler
-
-
 
 ## retrofit2.Call/okhttp3.Call
 
@@ -109,6 +111,36 @@
 
 - ServiceMethod#parseMethodAnnotation
 
+### ServiceMethod/HttpServiceMethod
+
+retrofit 2.5.0 版本之后 ServiceMethod 被抽象成为基类,其实现类只有 HttpServiceMethod ,通过 ServiceMethod#invoke 这一层抽象层,实现对后期除 OkHttpCall 之外的其他请求的调用.(从 2018/06/16 抽象出该类,但是至今没有除 HttpServiceMethod 的其他实现)
+
+### HttpServiceMethod#adapt
+
+HttpServiceMethod#adapt 用于在执行 ServiceMethod#invoke 时对于 OkHttpCall 的 Call 的转换,主要是为了支持 kotlin 的携程,挂起方法的请求模式.主要实现类有如下三种:
+
+- CallAdapted
+  
+  非 suspend 携程版本,应用老版本定义的 callAdapter 对 OkhttpCall 进行转换,返回 rxjava1,rxjava2,guava ListenableFuture 等返回对象.
+
+- SuspendForResponse
+  
+  返回的为 Response 版本.(*该处的 Body 也通过 ResponseBodyConverter 对原始的Body 进行了转换,但是会将这个 Response 通过 Continuation 回调到 suspend fun 继续执行,suspend fun 在 通过 kotlinc 生成字节码时会在方法参数最后添加一个参数类型为 Continuation 的参数, retrofit 则通过该参数进行 Continuation方法的回调*)
+
+- SuspendForBody
+
+  返回的是 Response 的 Body部分.(返回到该处的 Response 的 Body 部分其实是已经)
+
+### RequestFactory
+
+retrofit 2.5.0 的发布日期是 2018/11/19
+
+retrofit 2.5.0 版本之后,将 ServiceMethod 中对于 Method 方法注解,参数注解的解析构建 okhttp3.Request 的功能抽象进入了该类进行,减轻了 HttpServiceMethod 职责范围.
+
+retrofit 2.5.0 同时也在 RequestFactory 添加了对 kotlin croutine 支持*本质上是对 Api 中声明的接口方法,添加了 suspend fun 的注解*.
+
+TODO://在 Kotlin 接口方法中添加 suspend fun 请求方法,查看在 kotlin 中对于 suspend fun 的应用
+
 ## RequestBuilder
 
 被 ServiceMethod 和 ParameterHandler 用以解析注解参数构建 okhttp3.Request 对象.
@@ -130,3 +162,10 @@
 ### java 已经提供了 URL 和 URI 为什么 Okhttp 要自己创造一个 HttpUrl ?
 
 Answer: [https://square.github.io/okhttp/3.x/okhttp/] 参见 HttpUrl doc.
+
+### Retrofit 对于定义在 Object 中的方法采用 Method#invoke 进行调用,但是对于 Default 方法采用的是 Lookup 类和 MethodHandler 的方式进行调用,为什对于不同的方法要区别对待?
+
+### retrofit 2.6.1 之前的版本不支持定义 Api 的接口继承其他接口,2.6.1 及以后支持继承其他接口,但是接口不能定义泛型参数为什么?
+
+
+

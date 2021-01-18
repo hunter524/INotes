@@ -78,7 +78,7 @@ Result: http://github.com/square/retrofit/ (note the scheme stays 'http')
 
 - @HEAD
   
-  head 请求响应不存在 ResponseBody 因此返回值类型需要标记为 Call< Void >
+  head 请求响应不存在 ResponseBody 因此返回值类型需要标记为 Call< Void >,Call< Response< Void > >
 
 - @DELETE
 - @OPTIONS
@@ -131,6 +131,10 @@ Result: http://github.com/square/retrofit/ (note the scheme stays 'http')
 该注解需要结合 @Field 用于发送 form-url 请求.
 
 Multipart,FormUrlEncoded 标记的方法,请求方法必须是 @Post,@Patch,@Put 或者携带参数的 @Http 请求方法
+
+- SkipCallbackExecutor
+  
+  retrofit 2.6.0 添加该注解,在请求方法 Api 要求的返回值是 Call< Bean > 时,用于标记当前 Call 的 Callback 跳过 Retrofit 配置的 CallBackExecutor 机制.(即该请求的 Callback 回调不切换执行线程,直接在 Ohttp3 的执行线程执行)
 
 ### 参数注解
 
@@ -223,6 +227,10 @@ Multipart,FormUrlEncoded 标记的方法,请求方法必须是 @Post,@Patch,@Put
 
 - Call< Void >
 Api 接口方法不能返回 void 但是可以使用 Call< Void > 等标记我不需要关注响应,对应的Retrofit 则会使用 VoidResponseBodyConverter 直接返回一个 null 给调用者.
+
+- java.util.Optional 支持
+
+  retrofit 2.5.0 之后添加内置的 OptionalConverterFactory 用于对于返回值要求是 Call< Optional < Bean > > 格式的返回值的支持
 
 - retrofit2.Response/okhttp3.Response
 
