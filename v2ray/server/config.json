@@ -1,0 +1,82 @@
+{
+    "log": {
+        "access": "/var/log/v2ray/access.log",
+        "error": "/var/log/v2ray/error.log",
+        "loglevel": "warning"
+    },
+    "inbound": {
+        "port": 443,
+        "protocol": "vmess",
+        "settings": {
+            "clients": [
+                {
+                    "id": "3ec00594-1b2a-41c5-8451-b53a57e70eab",
+                    "level": 1,
+                    "alterId": 50
+                },
+                {
+                    "id": "0b6f340e-28f6-4984-a641-249a88163f29",
+                    "level": 1,
+                    "alterId": 50
+		},
+                {
+                    "id": "f4b1052b-c26d-45a5-9f67-4a6fc1556daf",
+                    "level": 1,
+                    "alterId": 50
+                }
+            ]
+        },
+        "streamSettings": {
+            "security": "tls",
+            "tlsSettings": {
+                "serverName": "guyuesh2.online",
+                "certificates": [
+                    {
+                        "certificateFile": "/cer/1_guyuesh2.xyz_bundle.crt",
+                        "keyFile": "/cer/2_guyuesh2.xyz.key"
+                    }
+                ]
+            }
+        }
+    },
+    "outbound": {
+        "protocol": "freedom",
+        "settings": {}
+    },
+    "inboundDetour": [],
+    "outboundDetour": [
+        {
+            "protocol": "blackhole",
+            "settings": {},
+            "tag": "blocked"
+        }
+    ],
+    "routing": {
+        "strategy": "rules",
+        "settings": {
+            "rules": [
+                {
+                    "type": "field",
+                    "ip": [
+                        "0.0.0.0/8",
+                        "10.0.0.0/8",
+                        "100.64.0.0/10",
+                        "127.0.0.0/8",
+                        "169.254.0.0/16",
+                        "172.16.0.0/12",
+                        "192.0.0.0/24",
+                        "192.0.2.0/24",
+                        "192.168.0.0/16",
+                        "198.18.0.0/15",
+                        "198.51.100.0/24",
+                        "203.0.113.0/24",
+                        "::1/128",
+                        "fc00::/7",
+                        "fe80::/10"
+                    ],
+                    "outboundTag": "blocked"
+                }
+            ]
+        }
+    }
+}
