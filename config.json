@@ -35,7 +35,7 @@
     },
     {
       "tag": "proxy1",
-      "port": 1081,
+      "port": 1089,
       "listen": "0.0.0.0",
       "protocol": "http",
       "sniffing": {
@@ -161,6 +161,8 @@
           "domain:apache.org",
           "regexp:\\.apache\\.org$",
           "regexp:\\.google\\.com$",
+          "regexp:\\.github\\.com$",
+          "regexp:\\.guyuesh2\\.xyz$",
           "domain:naver.com"
         ]
       },
@@ -174,16 +176,6 @@
           "91.108.8.0/22"
         ],
         "domain": null
-      },
-      {
-        "type": "field",
-        "port": null,
-        "inboundTag": null,
-        "outboundTag": "block",
-        "ip": null,
-        "domain": [
-          "geosite:category-ads"
-        ]
       }
     ]
   }
