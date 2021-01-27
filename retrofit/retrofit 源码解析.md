@@ -1,8 +1,93 @@
 # 源码解析
 
+## Retrofit 流程
+
+- 通过 Retrofit#Builder 构建 Retrofit:
+  
+  - 提供 okhttp3.Call.Factory
+  
+  - 提供 BaseUrl
+
+  - 添加 CallAdapter#Factory/Converter#Factory
+
+  - 添加 CallbackExecutor/配置构建 Api 接口对象是即时加载还是懒加载
+
+- 通过 Retrofit 对象构建,Api 请求接口的动态代理对象
+
+- 通过构建的动态代理对象调用 Api 接口,返回 Api 接口指定的返回值.如:Call< Bean >,Observable < Bean >,Call < Optional < Bean > > 等.该处负责解析 Api 接口指定的方法,生成 ServiceMethod 并且缓存 ServiceMethod,生成 ServiceMethod 的步骤如下:
+
+  - 解析方法的 参数注解/方法注解 获取 RequestFactory/验证方法的返回参数泛型类型是否有未确定的类型,如:泛型变量,泛型通配符则为未确定类型.
+
+  - 解析方法的返回值获取 CallAdapter,解析方法返回值的 Response 类型,获取 ResponseConverter,分别用于 retrofit2.OkHttpCall 向 Observable 等其他类型的转换,以及 ResponseBody 向 Response 的转换.
+
+- 通过返回的 Call,Observable 对象执行真正的请求.无论通过 CallAdapter 怎么包装,最终执行请求的逻辑的均是 retrofit2.OkHttpCall.
+  
+  - retrofit2.OkHttpCall,也只是包转了一层 okhttp3,通过 retrofit2.ReequestFactory 构建 okhttp3.Request,通过先前配置的 Retrofit 的 okhttp3.Call.Factory 构建 okhttp3 的 Call,通过 OkHttp3 执行最终的 http 请求.
+
 ## 动态代理
 
 ## 反射类型系统
+
+java 的反射类型系统,初步入门时通常只会提到 Class,如 String 可以用 Class表示,那么 List< E > 带有泛型的类如何表示?显然 Class
+
+### 类型抽象
+
+#### Class
+
+不带有泛型系统的原始类型(retrofit 称之为 rawType),如:String.class 的表示则为 Class 类型,ArrayList < Bean > 通过实例对象获取到的类型也为Class 类型则为原始类型
+
+#### GenericArrayType
+
+方法声明的参数,返回值是泛型数组则返回该类型.Method#getGenericParameterTypes, Method#getGenericReturnType
+
+#### ParameterizedType
+
+泛型父类已经被参数化的类型,通常是一个子类实现了泛型父类,指定了父类泛型参数的类型.通过子类 Class#getGenericSuperclass 和 Class#getGenericInterfaces 可以获得该类的实例.
+
+方法中声明的返回值,如果带有泛型类.则通过 Method#getGenericReturnType 也会获得该类型的一个实例.
+
+方法中声明的参数,如果带有泛型类型.则通过 Method#getGenericParameterTypes 也可以该类型的一个实例.
+
+#### TypeVariable< D >
+
+ParameterizedType 中声明的泛型参数.如 T,R 等.
+
+#### WildcardType
+
+使用 * 通配符号定义泛型类型时才会该类型的实例.只有使用 \* 时才可以使用 super 关键字.
+
+使用super关键字指定通配符类型时:
+
+- lowerBounds 为 super 指定的类型
+- upperBounds 为 Object 类型
+- 如果使用 extends 指定通配符类型则只存在,upperBounds 不存在 lowerBounds.
+- 如果只用 ? 声明泛型通配符,则 UpperBounds 默认为 Object 不存在 lowerBounds.
+
+### 其他辅助类型抽象
+
+#### Member
+
+- AccessibleObject
+  
+- AnnotatedElement
+
+#### Parameter
+
+#### Field
+
+#### Executable
+
+- Constructor
+
+- Method
+
+#### GenericDeclaration
+
+可以声明泛型参数的元素继承自该接口,如 Class,Method,Constructor.
+
+### 泛型声明的限制
+
+T,R,super,extends,* ? Mehtod,Class?
 
 ## Platform
 
@@ -23,6 +108,12 @@
 - Factory#responseBodyConverter
 
 - 只能获取到方法的注解*无法获取方法参数的注解*,还可以获取需要返回的参数的类型,以及 Retrofit.*响应转换器也可以通过相应注解返回不同的转换器,用于对不同的请求进行响应解码*
+
+### CallAdapter.Factory
+
+Factory 在解析 Method#getGenericReturnType 已经将外成的 ParameterizedType 进行了一次解析,如果 Call< Optional < Bean > >,在 Factory 中剥离了 Call 类型,用于匹配如何对Call 进行转换,如:转换成为 Observable,CompleteableFuture 等.
+
+Factory 根据不同的 Call 或者 Observable 类型用于匹配不同的 CallAdapter,对 Call 进行转换.同时将内层的泛型参数作为 ResponseType,提供给 Converter.Factory 用于匹配对应的 ResponseConverter 用于对 ResponseBody 进行转换.如该处的 Optional < Bean > 类型则需要通过 OptionalConverterFactory 进行两次 Response 转换,第一次转换 ResponseBody -> Bean ,第二次将 Bean 包转成为 Optional < Bean >
 
 ### 内置 Converter/BuiltInConverters
 
@@ -137,19 +228,28 @@ retrofit 2.5.0 的发布日期是 2018/11/19
 
 retrofit 2.5.0 版本之后,将 ServiceMethod 中对于 Method 方法注解,参数注解的解析构建 okhttp3.Request 的功能抽象进入了该类进行,减轻了 HttpServiceMethod 职责范围.
 
-retrofit 2.5.0 同时也在 RequestFactory 添加了对 kotlin croutine 支持*本质上是对 Api 中声明的接口方法,添加了 suspend fun 的注解*.
+retrofit 2.5.0 同时也在 RequestFactory 添加了对 kotlin croutine 支持*本质上是对 Api 中声明的接口方法,添加了 suspend fun ,kotlinc 编译器会对　suspend fun 方法添加一个额外的参数　Continuation 用以实现携程的编程模式*.
 
-TODO://在 Kotlin 接口方法中添加 suspend fun 请求方法,查看在 kotlin 中对于 suspend fun 的应用
+- RequestFactory#create
+
+  被　OkHttpCall 用以创建　okhttp2.Request 对象．
 
 ## RequestBuilder
 
 被 ServiceMethod 和 ParameterHandler 用以解析注解参数构建 okhttp3.Request 对象.
+
+在　2.6.2　之后的版本中则是被　RequestFactory　进行配置，用于构建　okhttp3.Request.
+retrofit 中的　RequestBuilder　只是一个桥接类，用于桥接　RequestFactory　与　okhttp3.Request.Builder 最终　okhttp3.Request 的构建还是交由　okhttp3.Request.Builder　进行构建．
 
 ## 一些辅助类
 
 ### ExceptionCatchingRequestBody
 
     只是为了包装真实的 ResponseBody#read 操作,捕获 read 操作中潜在的可能抛出的异常,便于将这个异常在 OkHttpCall#parseResponse 读取时继续向外进行抛出.
+
+### retrofit.Invocation
+
+为 retrofit 2018/09/21 添加的新特性,通过 Invocation 类向 okhttp3.Request 类添加 tag,用于 Okhttp3 在拦截器中获得当前通过 retrofit 封装的请求的接口的方法的抽象和调用参数.*可以在拦截器中统计每个 API 接口,每个方法的调用次数,请求响应时间,mock 特定接口方法的返回值等切面功能*
 
 ### adapter-rxjava2
 

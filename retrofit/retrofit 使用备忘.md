@@ -24,7 +24,7 @@ true: 即时加载,在 Rtrofit#create API 动态代理对象是,即解析 API �
 
     - Android 平台:使用 Call 执行默认的 callbackExecutor 为 MainThreadExecutor Call 回调在主线程.返回的适配 Retrofit.Call 的 CallAdapter.Factory 为 ExecutorCallAdapterFactory.
 
-    - Java 平台:回调默认在 OKhttp3 的请求线程池的线程执行.
+    - Java 平台:回调默认在 OKhttp3 的请求线程池的线程执行.*retrofit 2.6.0 添加 SkipCallbackExecutor注解,用于跳过 callbackExecutor 回调的执行*
 
 ## Retrofit#baseUrl 与 @Url 的配置
 
@@ -122,7 +122,7 @@ Result: http://github.com/square/retrofit/ (note the scheme stays 'http')
 
 - Multipart
 
-方法注解标记是 Multipart 模式的 Http 请求.参数部分需要添加 @Part 注解用于标记每一部分的参数.
+方法注解标记是 Multipart 模式的 Http 请求.参数部分需要添加 @Part 注解用于标记每一部分的参数.或者是通过 PartMap 标记一个 Key 为 String,值为 Part 的 Map.请求标记该注解时要求请求方法必须是可以包涵　Body 的请求如：Post,Put,Patch. 不能是　Get,Delete,Head,Options.如果是　HTTP 自定义的请求方法也需要包涵　Body 部分．
 
 - FormUrlEncoded
 
@@ -146,21 +146,29 @@ Multipart,FormUrlEncoded 标记的方法,请求方法必须是 @Post,@Patch,@Put
 
   @Url 注解不能重复标记两次
 
+  @Url　注解不能与　请求方法注解的　ｖalue 值共存．（即不能重复两次标识路径）
+
   @Path 注解不能和 @Url 注解同用 (你都完全自定义 @Url 了为啥还要 @Path???)
 
-  @Query 注解要在 @Url 之后,同 @Path 查询参数的替换也依赖于 url 路径
+  @Query 注解要在 @Url 之后,同 @Path 查询参数的替换也依赖于 url 路径(包括　QueryName,QueryMap,)
+
+  该注解标记的参数只能是　HttpUrl,String,URI,android.net.Uri 类型，不能是其他类型．
 
 - Path
 
   Query 注解要在 Path 注解 之后
 
-  Path 注解不能和 @Url 同用
+  Path 注解不能和 @Url 同用．（即　＠Path 注解替换的　Path 路径值，只能为请求方法标记中的的ｖalue 值）
 
   使用 Path 注解是一定需要有一个相对路径 Url.(先有路径再有相对的 Url)
 
+  Path 注解标记需要提供　ｖalue 值用于替换　path 路径中　{name} 标记的路径的占位符号．
+
 - Query
   
-  Query 注解的参数可以是 Iterable,Array.如果是 Iterable,Array 则值会以相同的 key 加入 Request 中.(如 文档形成 /friends?group=coworker&group=bowling 的查询参数)
+  Query 注解的参数可以是 Iterable,Array.如果是 Iterable,Array 则值会以相同的 key 加入 Request 中.(如:文档形成 /friends?group=coworker&group=bowling 的查询参数)
+
+  Query 只是在　Url 后面添加查询参数，Query 既可以添加在　Get请求之上，也可以添加在　Post 请求上，还可以添加在其他任何　Http 请求之上．（QueryMap,QueryName 注解与该注解基本相同)
 
 - QueryName
 
@@ -177,37 +185,47 @@ Multipart,FormUrlEncoded 标记的方法,请求方法必须是 @Post,@Patch,@Put
 
 - HeaderMap
 
-  与 QueryMap 对应,该处是为了可以动态添加为 Map 的 Header 值.
+  与 QueryMap 对应,该处是为了可以动态添加为 Map 的 Header 值.注解标记的参数值必须是Map,且　Map 的 Key　类型需要为　String,Map 的　ｖalue 类型可以为任意值，其会被通过　StringConverter 转换成为字符串．
 
 - Field
+
+　参数添加了该注解则方法必须添加　@FormUrlEncoded 标记是　form 请求．
   
   为 form 请求需要添加的参数的 key 和 参数作为 value 值.
 
 - FieldMap
   
-  同 QueryMap 功能对应,该处是为了可以动态添加 Map 作为 form 值
+  同 QueryMap 功能对应,该处是为了可以动态添加 Map 作为 form 值.同上参数必须是　Map 类型，Map 的　key 值必须是　String 类型，ｖalue 值可以为任意类型，通过　StringConverter 抓换成为String 类型．
 
 - Part
   
   与方法的 MultiPart 注解需要同时使用,MultiPart 标记在请求方法上,标记当前方法的Http 请求方法为 MultiPart.
 
-  *Part注解如果 value 是空则被注解的参数需要是MultipartBody#Part 类型,或者组件类型为 MultipartBody#Part 的数组或者Iterable*
+  *Part注解如果 value 是空则被注解的参数需要是MultipartBody#Part 类型,或者组件类型为 MultipartBody#Part 的　数组　或者　Iterable*
 
-  *Part注解如果 value 不为空,Part 注解的参数则会通过 RequestBodyConverter 对 Part 注解的参数进行进行转换*
+  *Part注解如果 value 不为空,Part 注解的参数则会通过 RequestBodyConverter 对 Part 注解的参数进行进行转换，同时结合　ｖalue 值构建　multipar 请求的每一个　part 部分*
 
-  *Part注解如果 value 不为空,但是注解的参数类型为 MultipartBody#Part 则会抛出错误*
+  *Part注解如果 value 不为空,但是注解的参数类型为 MultipartBody#Part 则会抛出错误(此时　Part 中的　Header 会与　ｖalue 中的　Header 相互冲突*
 
   *如上 Part 注解无论 value 是否为空参数均可以为 Iterable,List 类型,如果 value 不为空则会以相同的注解配置,添加多个Part部分*
 
+  Part 注解的　value 为空则注解标记的参数类型必须为　Part 或则其数组列表，Part 注解的　ｖalue 不为空则　ｖalue 至必须不能为　Part,但是可以为其他任何类型，通过　RequestBodyConverter 转换成为　RequestBody 结合　Headers 组合成为　Part.
+
 - PartMap
 
-  同 QueryMap,key 值的类型必须为 String,用于作为 MultiPart 请求部分每个 Part 部分的名称,value 值可以为任意类型,会被通过 RequestBodyConverter 转换成为 MultiPart 部分的每个 Part 中的 RequestBody 部分.
+  同 QueryMap,key 值的类型必须为 String,用于作为 MultiPart 请求部分每个 Part 部分的名称,名称主要构建在每个　Part　部分的　Header中,value 值可以为任意类型,会被通过 RequestBodyConverter 转换成为 MultiPart 部分的每个 Part 中的 RequestBody 部分.*value 可以为任意类型,但是 MultipartBody.Part 类型除外(因为一个 Part 部分既包括了请求的 Header部分,Header 存在一个该部分的 Key值,也包含了 Body 部分),如果需要是 Part类型,则可以使用注解 @Part List< Part > 类型进行处理*
 
 - Body
   
-  不能与 FormUrlEncoded,MultiPart 注解同时使用,也不能一个请求方法中标记了两个 @Body 注解.FormUrlEncoded 有自己的格式的Body不需要用户提供body,MultiPart 会由多个 Part 构建形成真实的 Body.
+  不能与 FormUrlEncoded　或　MultiPart 注解同时使用,也不能一个请求方法中标记了两个 @Body 注解.FormUrlEncoded 有自己的格式的Body不需要用户提供body,MultiPart 会由多个 Part 构建形成真实的 Body.
 
-  同时对于不需要 Body 的请求方法(如:Delete,Get,Head,Option 均不需要Body,Patch,Post,Put 则需要 Body),也不能添加 @Body 注解标记的参数.(*ServiceMethod#Builder#build 时会检查相关请求配置的注解和参数是否符合 Http 请求的要求*)
+  同时对于不需要 Body 的请求方法(如:Delete,Get,Head,Option 均不需要Body,Patch,Post,Put 则需要 Body),也不能添加 @Body 注解标记的参数.(*ServiceMethod#Builder#build 时会检查相关请求配置的注解和参数是否符合 Http 请求的要求,2.6.2 以后的版本会在　RequestFactory 中添加　Http 请求的合法性检查*)
+
+- Tag
+
+  retrofit 2.6.0 添加的特性,用于在用于注解参数,以参数类型作为 Key,实例值作为 value 添加到 okhttp3.Request 对象上.对于 List< Bean > 类型的 tag 则使用的是原始类型 List 作为 key 添加到 okhttp3.Request 的对象上（即对于　Tag 的　key 类型取原始类型，而不是泛型类型）.一个请求方法可以标记有多个 Tag 但是key值不能相同,即 Class 不能相同.
+
+  搭配　retrofit2.Invocation Class 可以在　OkHttp 中追踪到这个特定的请求是否是由　Retrofit 发送出去的，以及放松该请求的方法，以及传递进入的参数．
 
 ## @FormUrlEncoded/@Multipart
 
