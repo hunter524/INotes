@@ -165,6 +165,10 @@ Factory 根据不同的 Call 或者 Observable 类型用于匹配不同的 CallA
   
   如果设置了 Retrofit#callbackExecutor 再次代理 OkHttpCall 的回调执行.*该实现类的被代理类为 OkHttpCall 目标是代理 OkHttpCall 的回调进行切换线程执行*
 
+- retrofit2.Call< T >/retrofit.Callback< Response < T > >
+
+  Api 接口如果声明的返回值类型为 Call< Bean > 则其通过 execute/enqueue 执行得到的结果是 Response< Bean >.Todo:// 该处的泛型是如何传递的.
+
 ### okhttp3.Call
 
 该接口的实现类在 okhttp3 中只有 okhttp3.RealCall ,其中 AsyncCall 并非真实的实现该接口的 Call.AsyncCall 只是作为 RealCall 的一个内部类包装了 RealCall 的异步执行逻辑,本质上 AsyncCall 是一个 Runnable 用于提交到 okhttp3 内部的线程池中执行.

@@ -245,12 +245,38 @@ Multipart,FormUrlEncoded 标记的方法,请求方法必须是 @Post,@Patch,@Put
 
 - Call< Void >
 Api 接口方法不能返回 void 但是可以使用 Call< Void > 等标记我不需要关注响应,对应的Retrofit 则会使用 VoidResponseBodyConverter 直接返回一个 null 给调用者.
+*响应标记 Call< Bean > 时实际得到的 CallBack 中的类型为 Response< Bean >*
 
 - java.util.Optional 支持
 
   retrofit 2.5.0 之后添加内置的 OptionalConverterFactory 用于对于返回值要求是 Call< Optional < Bean > > 格式的返回值的支持
 
 - retrofit2.Response/okhttp3.Response
-
-  retrofit2 在 ServiceMethod#build 时则检查了 Call< R > 或者 Observable < R > 其中 R 的类型不能是Response 的简单类型,可以是 Response< Bean > 需要带参数化类型
+  
+  retrofit2 在 ServiceMethod#build 时则检查了 Call< R > 或者 Observable < R > 其中 R 的类型不能是Response 的简单类型(泛型的 rawType),可以是 Response< Bean > 需要带参数化类型
   *但是声明 Call< Bean > postBlog(@Body Bean bean) 方法时通过 Call#enqueue,Call#execute 返回的响应类型为 Response< Bean > 类型*  
+
+  - 响应可以标记为 retrofit,Response< T > 类型,但是不能标记为 okhttp3.Response 类型,因为在 retrofit.OkHttpCall 的源码实现层面已经不提供 okhttp3.Response,只提供了 ResponseBody 给 Converter 进行类型转换.
+
+  - 返回值要求是 retrofit2.Response 则必须具化泛型参数.无法要求返回值是 okhtt3.Response,因为 retrofit 不提供.(retrofit2 的木的便是屏蔽 okhttp3 的实现细节)
+
+## Converters
+
+负责用于将任意数据转换为 okhttp3.RequestBody, 同时将 okhttp3.ResponseBody 转换成为用户想要的数据.
+
+在 retrofit2 的子项目 retrofit-converters 中内置了 gson,guava,jackson,moshi,jaxb,protobuf,simlexml,wire 等默认的数据请求与响应转换器.
+
+存在的问题与解决方案:
+
+- 如 jackson,gson 转换器并没有识别方法的注解,直接对 ResponseBody 读取执行 Json 转换.(会导致在同一个 retrofit 添加的多个转换器如果 gson,jackson 的转换器添加在前面会导致后面的转换器失效)
+
+- 因此转换器的添加需要注意优先级(*添加顺序*),如需要支持相应数据支持 Optional 同时支持 json 则需要先添加 guava 转换器,再添加 jackson,gson 转换器.
+
+- 使用者也可以添加自己的 Converter 转换器,用于通过如识别不同自定义方法注解返回不同的转换器的功能.
+
+## CallAdapters
+
+用于将 retrofit2.Call (retrofit2.OkhttpCall) 单回调模式包装成其他模式.如 rxjava 的响应模式,guava ListenableFuture 多回调模式,且每个回调可以在用户指定的携程进行执行.
+
+在 retrofit 的子项目 retrofit-adapters 中内置了 guava(ListenableFuture) java8 (CompletableFuture *目前retrofit 已经内置支持该类型,该子项目基本废弃*) rxjava(Observable,Single,Completable) rxjava2(Observable,Flowable,Single,Maybe,Completable) rxjava3(与 rxjava2基本相同) scala(scala 自己的 Future).额外的目前 retrofit2 目前内置了对 kotlin 携程的支持(支持使用 kotlin 写 suspend fun 方法),同时也通过内置的 DefaultCallAdapterFactory 添加了对回调切换线程操作的支持.
+*对比Converter的实现则该处的实现更加优雅,其根据方法不同的返回类型判断 当前 CallAdapter.Factory 判断是否要返回 Converter*
