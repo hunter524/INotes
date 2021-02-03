@@ -28,7 +28,7 @@
 
 ## 反射类型系统
 
-java 的反射类型系统,初步入门时通常只会提到 Class,如 String 可以用 Class表示,那么 List< E > 带有泛型的类如何表示?显然 Class
+java 的反射类型系统,初步入门时通常只会提到 Class,如 String.class 可以用 Class表示,那么 List< E > 带有泛型的类如何表示?显然 Class 只能表示不带有泛型的类,带有泛型的类则只能表示出不带泛型的模式,无法表达出带有泛型的模式.
 
 ### 类型抽象
 
@@ -50,11 +50,11 @@ java 的反射类型系统,初步入门时通常只会提到 Class,如 String �
 
 #### TypeVariable< D >
 
-ParameterizedType 中声明的泛型参数.如 T,R 等.
+ParameterizedType 中声明的泛型参数,(*ParameterizedType 虽然是已经参数化的类型,但是其传递的参数可能依旧是泛型类型,如 T,R 等没有被具化的类型*),也可以是方法,类中直接声明的泛型变量 T,R 等未被具化的泛型变量.
 
 #### WildcardType
 
-使用 * 通配符号定义泛型类型时才会该类型的实例.只有使用 \* 时才可以使用 super 关键字.
+使用 \* 通配符号定义泛型类型时才会该类型的实例.只有使用 \* 时才可以使用 super 关键字.(*java.reflect.WildcardType抽象中的方法定义可以看出,只有其具有 WildcardType#getLowerBounds 用于对应 super关键字*)
 
 使用super关键字指定通配符类型时:
 
@@ -87,7 +87,17 @@ ParameterizedType 中声明的泛型参数.如 T,R 等.
 
 ### 泛型声明的限制
 
-T,R,super,extends,* ? Mehtod,Class?
+只有实现了 java.lang.reflect.GenericDeclaration 接口的子类才可以声明泛型,目前实现该接口的类只有 Class,Method,Constructor.即只有类上,方法上,构造方法上才可以声明泛型.
+
+T,R 泛型可以声明在 Method,Class 上,反射时得到的泛型类型是 TypeVariable,调用方法时可以指定泛型类型(方法返回值的强制向下转型的过程).构建指定类型的子类时指定具化的泛型类型(实际上同方法调用并无本质区别).*具体的转型过程可以查看泛型类及其子类生成的字节码(子类指定泛型参数类型,覆写对应父类方法时会生成桥接代码(字节码方法)用于进行类型的转换)*
+
+- 类声明的泛型参数,如果子类覆盖了父类的泛型方法,则会生成对应的桥接方法.如果没有则调用父类的泛型方法时则只在调用处执行类型转换.
+  
+- 方法声明泛型参数,则在调用处插入 checkcast 字节码,用于将方法返回值进行类型转换,转换成为声明的待赋值的变量的类型.(checkCast 则检查类型是否可以转换,如不可以转换则抛出 ClassCastException 异常,该处是虚拟机执行的操作)
+
+声明在 Method,Class 上的泛型变量可以使用 T,R 等具名的泛型名称,只能使用 extends 限定上界,具有多个上界时使用 < T extends Runnable & Callable > 的写法.
+
+? 只可以使用在具体化泛型类,类型时,? 声明的泛型反射得到的类型是 WildcardType,只有该类型的泛型声明才可以使用 extends super 指定类型的上下界.(*因为? 是匿名的泛型参数声明,因此无法*)
 
 ## Platform
 
@@ -178,8 +188,12 @@ Factory 根据不同的 Call 或者 Observable 类型用于匹配不同的 CallA
 如同上面的 retrofit.Call 与 okhttp3.Call 的代理与被代理的关系,retrofit 使用自己的 Callback 提供给调用者使用,retrofit 真正执行时则依旧依赖于 okhttp3.Call 与 okhttp3.Callback 通过代理模式分别暴露了 retrofit.Call 和 retrofit.Callback 给使用者使用.
 
 - Call< T > , Callback< T >,Response< T >,
-  
-  TODO://源码层面的泛型(类型规则)传递
+
+ 在 java 的泛型世界,泛型参数在泛型类中并不存在具体类型,如 ArrayList 的泛型类在存储元素时是均是存储为 Object 类型(将存储对象的类型向上转型),在获取数据时再根据泛型类型向下转型.
+
+ Call < T > 的泛型类型由用户定义的请求 Api 的方法定义,所以实际上只是在调用方法处执行了一次类型转换.(*retrofit 内部其实并不关注 Api 接口方法中的声明的泛型类型,因为其实现类 CallAdapted 在构建时并没有指定泛型的具体类型*)
+
+ 因此 retrofit2.Call 的实现类 retrofit.OkHttpCall 声明泛型参数只是为了从源码层面制定实现类的泛型规则.
 
 ## ServiceMethod/ServiceMethod#Builder
 
