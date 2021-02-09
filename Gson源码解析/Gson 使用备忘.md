@@ -115,6 +115,7 @@ gson.fromJson(json, fooType);
 
     反序列化是 TypeAdapter#read 从 JsonReader 直接转换成为 Bean.
     序列化是 TypeAdapter#write 从 Bean 写入 JsonWriter .
+    
 
   - TypeAdapterFactory
 
