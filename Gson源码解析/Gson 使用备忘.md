@@ -115,7 +115,6 @@ gson.fromJson(json, fooType);
 
     反序列化是 TypeAdapter#read 从 JsonReader 直接转换成为 Bean.
     序列化是 TypeAdapter#write 从 Bean 写入 JsonWriter .
-    
 
   - TypeAdapterFactory
 
@@ -210,6 +209,29 @@ gson.fromJson(json, fooType);
 
 直接在字段上添加该注解,用于标记该字段在序列化/反序列化中的名称.*标记注解的字段名称优先级高于上面两种命名策略的优先级*
 
-## Others
+## 注解总结
 
-- 
+- @Expose
+
+配合 GsonBuilder#excludeFieldsWithoutExposeAnnotation 构建配置标记某个字段是否需要被序列化和反序列化.(*如方法名称如果某个字段没有被标记注解则直接忽略*)
+
+- @JsonAdapter
+
+用于标记指定的类/字段使用指定的类型适配器.
+该注解的值可以是:TypeAdapter/TypeAdapterFactory/JsonSerializer/JsonDeserializer 或者其子类.(*不推荐一个类同时实现上述多个接口,如果实现上述多个接口优先级从高到低,该特性由源码分析得到*)
+
+- @SerializedName
+
+用于标记指定字段序列化和反序列化时对应的名称.
+
+- @Since/@Until
+
+用于标记指定字段的序列化和反序列化时支持的版本号.(*注解的值是 Double 类型,不符合语义化版本号标准*)
+[语义化版本][https://semver.org/lang/zh-CN/]
+
+## 高级使用技巧
+
+### Gson#getDelegateAdapter
+
+主要代理用于已有的 TypeAdapterFactory生成 TypeAdapter,对其添加诸如统计,增强,审计相关的附加功能.具体使用方法参见 Gson 该方法注解.
+*与 Gson#getAdapter存在明显区别,Gson#getAdapter 获得的 TypeAdapter 是被包装过的 TypeAdapter 且无法跳过指定的 TypeAdapter*
