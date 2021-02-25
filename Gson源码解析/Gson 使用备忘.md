@@ -2,7 +2,17 @@
 
 Gson 是线程安全的,多个线程可以共享同一个 Gson 对象执行序列化反序列化操作.(*即Gson 对象是 Stateless 的,其内部不维护任何状态*)
 
-实现策略为由类型主导序列化/反序列化流程,而不是由Json String 主导该流程.
+实现策略为由类型主导序列化/反序列化流程,而不是由Json String 主导该流程.(序列化由于传入的是 Bean 则自然通过该 Bean 的类型主导序列化的过程,反序列化时需要传入反序列化的类型,因此也是类型主导的,但是反序列化时赋值的顺序是由字符串解析主导的)
+
+## Gson
+
+门面类 Gson 的主要方法:
+
+- toJson:将普通Bean,泛型 Bean,JsonElement 序列化成为 Json String (t)
+
+- fromJson: 将 JsonElemet,java.io.Reader,JsonReader,String 反序列化普通 Bean 和 泛型 Bean.
+
+- toJsonTree: 将普通 Bean,泛型 Bean 序列化成为 JsonElement 解析树对象.
 
 ## Gson 序列化/反序列化(Object)
 
@@ -235,3 +245,7 @@ gson.fromJson(json, fooType);
 
 主要代理用于已有的 TypeAdapterFactory生成 TypeAdapter,对其添加诸如统计,增强,审计相关的附加功能.具体使用方法参见 Gson 该方法注解.
 *与 Gson#getAdapter存在明显区别,Gson#getAdapter 获得的 TypeAdapter 是被包装过的 TypeAdapter 且无法跳过指定的 TypeAdapter*
+
+### JsonParser
+
+将 Json 字符串解析生成 Json 解析树,树及树中的元素主要有 JsonElement 的子类:JsonArray,JsonNull,JsonObject,JsonPrimitive 主要方法有 parseString 解析字符串,parseReader,parseReader 分别解析 java.io.Reader 和 Gson 的 JsonReader

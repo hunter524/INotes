@@ -6,6 +6,8 @@ gson 项目 init 提交 2008,fastjson,jackson 项目init 均为 2011.
 
 [jackson 源码][https://github.com/FasterXML/jackson-core]
 
+哪儿有岁月静好?只是有人在为我们默默负重前行!
+
 ## 使用层面的 API
 
 - GsonBuilder
@@ -88,9 +90,21 @@ Gson#toJsonTree 获得 JsonElement 解析树抽象,使使用者自行面向解�
 
 Json String 反序列化的核心类,负责对Json String 进行解析返回 Bean 对象数据.
 
+- JsonReader
+
+- JsonTreeReader
+
 #### JsonWriter
 
 负责对 Bean 对象数据进行解析(序列化),将解析出来的值写入 JsonWriter 序列化成为　JsonString
+
+- JsonWriter
+
+  基础的 Json 序列化解析 API 抽象,抽象成为更高级的 Json 序列化解析 API(如:beginArray,beginObject,name,value 等简便的 API),避免了对 { } [] , : " 等基础 Json 元素的操作.同时生成的字符串委托给了底层的 StringWriter,JsonWriter 借助 StringWriter 生成 Json String.
+
+- JsonTreeWriter
+
+  JsonWriter 的子类,覆写了 beginArray,endArray,name,value 等方法,用于生成 JsonElement 的解析树.
 
 ## ConstructorConstructor(对象构建)
 
