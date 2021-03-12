@@ -239,6 +239,18 @@ gson.fromJson(json, fooType);
 用于标记指定字段的序列化和反序列化时支持的版本号.(*注解的值是 Double 类型,不符合语义化版本号标准*)
 [语义化版本][https://semver.org/lang/zh-CN/]
 
+## Gson Lenient(宽容)
+
+宽容的 Json 定义:
+
+- 出现两个顶层的元素(严格的 Json 规范只能出现一个顶层元素,要么是 Object,要么是 数组,要么是一个单独的顶层值,通过 Gson 使用 JsonWriter 序列化时无法出现两个相同的顶层值)
+  
+- Double 数值出现 NaN,-Infinity,+Infinity
+
+- 反序列化 Json 不符合严格的 Json 定义如出现 // # /**/ 等注解,名称没有双引号(或者使用了单引号),字符串值没有双引号(或者使用了单引号),数组元素使用了 ; 而没有使用 , 进行分割.不必要的数组分割符合,如果使用了且允许 null 值则会解析为 null 值. name 和 value 之间没有使用 : 进行分割,而是使用了 = => 等分割符号.
+
+- *反序列化/序列化时 JsonReader/JsonWriter 在使用之前默认会被设置成为 Lenient 宽容模式,只有使用 Gson#newJsonReader 时 JsonReader 会按照 Gson配置的 Lenient 模式被配置和设置 Lenient 状态*
+
 ## 高级使用技巧
 
 ### Gson#getDelegateAdapter
