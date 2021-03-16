@@ -90,6 +90,46 @@ Gson#toJsonTree 获得 JsonElement 解析树抽象,使使用者自行面向解�
 
 参见 Gson 使用备忘的 自定义 ExclussionStrategy 解析策略.
 
+### JsonToken
+
+反序列化过程中,用于标记即将被解析的字符多代表的 Json 的基础元素类型(如:beginArray,endArray,Number,Boolean,String,Null 等 JsonString 中的状态)
+
+### JsonScope
+
+在 序列化/反序列化 过程中标记 JsonString/Json 对象当前所处的限定的解析的状态的标记定义.
+
+- EMPTY_DOCUMENT(6)
+  
+  序列化: 标记当前 JsonString 还没有开始解析(JsonString 为空)
+
+- NONEMPTY_DOCUMENT(7)
+
+  序列化: 从一个 EMPTY_DOCUMENT 栈底状态转变为 NONEMPTY_DOCUMENT,在写入一个顶层值,开始一个对象,数组时即会触发该种状态的转变.
+
+- EMPTY_OBJECT(3)
+  
+  序列化: 通过 NONEMPTY_DOCUMENT 的操作之后栈底的元素状态便不会再改变.此时调用 begainObject 开始一个新的顶层对象 or Name 对应的子对象时会将 EMPTY_OBJECT 压入栈顶.
+
+- DANGLING_NAME(4)
+  
+  序列化:当对于刚刚新开始的一个 Object or 已经由值的 Object 开始写入 Name 值时栈顶的元素状态会从 EMPTY_OBJECT/NONEMPTY_OBJECT 切换成为 DANGLING_NAME,那么下一个操作必须是 写入值的操作.
+
+- NONEMPTY_OBJECT(5)
+
+  序列化:当值进行真正的写入时,栈顶的状态会由 DANGLING_NAME 切换成为 NONEMPTY_OBJECT.直到调用 endObject ,结束当前层的 Object 的值写入,移除 栈顶的值.
+
+- EMPTY_ARRAY(1)
+  
+  序列化:与上述 EMPTY_OBJECT 的状态类似,只是少了 DANGLING_NAME 这种中间过度状态.
+
+- NONEMPTY_ARRAY(2)
+
+  序列化:标记当前这个新开始的 Array 已经写入了值.
+
+- CLOSED
+  
+  目前只有在反序列化应用到了该种状态标记.
+
 ### TypeAdapter/JsonReader/JsonWriter
 
 通过对 ReflectiveTypeAdapterFactory#Adapter 的源码分析,Json 的序列化和反序列化均是类型主导的.(*该处 JsonReader 读取,JsonWriter 写入在底层API 的使用上均是存在状态的,如:通过 JsonDeserializer/JsonSerializer 实现自定义的序列化和反序列化解析数据*)
@@ -101,6 +141,7 @@ Gson#toJsonTree 获得 JsonElement 解析树抽象,使使用者自行面向解�
 #### JsonReader
 
 Json String 反序列化的核心类,负责对Json String 进行解析返回 Bean 对象数据.
+*赋值的顺序由 JsonString 中字段的顺序主导,声明在前面的字段会先赋值给 Bean 对应的字段*
 
 - JsonReader
 
@@ -109,18 +150,13 @@ Json String 反序列化的核心类,负责对Json String 进行解析返回 Bea
 #### JsonWriter
 
 负责对 Bean 对象数据进行解析(序列化),将解析出来的值写入 JsonWriter 序列化成为　Json String.
+*由类型中字段声明的顺序主导生成的 JsonString 对应的字段在 JsonString 中的顺序*
 *JsonWriter 的核心抽象方法为 beginObject,endObject,beginArray,endArray,name,value 6个三组方法分别标记对象的开始结束,数组的开始结束,字段基础值的名称/值的写入*
 *JsonWriter 主导了整个 Bean 进行序列化时的状态控制,错误检测,同时因为 JsonWriter 没有做并发安全性的设计和实现,因此 Gson 官方文档称之为线程安全的类*
 
 - JsonWriter
 
-  基础的 Json 序列化解析 API 抽象,抽象成为更高级的 Json 序列化解析 API(如:beginArray,endArray,beginObject,endObject,name,value 等简便的 API),避免了对 { } [] , : " 等基础 Json 元素的操作.同时生成的字符串委托给了底层的 StringWriter,JsonWriter 借助 StringWriter 生成 Json String.
-
-- JsonTreeWriter
-
-  JsonWriter 的子类,覆写了 beginArray,endArray,name,value 等方法,用于生成 JsonElement 的解析树.
-
-- JsonWriter
+  基础的 Json 序列化解析 API 抽象,抽象成为更高级的 Json 序列化解析 API(如:beginArray,endArray,beginObject,endObject,name,value 等简便的 API),避免了对 { } [] , : " 等基础 Json 元素的操作.同时生成的字符串委托给了底层的 StringWriter,JsonWriter 借助 StringWriter 生成 Json String.(*JsonWriter 只做 Bean 解析流程,JsonString 合法性的控制,底层的 String 生成策略则完全交给了 StringWriter 进行*)
 
 内部实现思路:
 
@@ -128,7 +164,7 @@ stack 字段用于存储当前写入值的状态,采用栈的模式进行压栈�
 
 deferredName 为暂缓写入的基础字段,对象,数组的名称属性值,在写入字段值,开始写入对象内部元素,开始写入数组元素时会将 name 值写入最终的 Writer.
 
-indent.separator: 缩进标识符,name,value 分割标识符.
+inden , separator: 缩进标识符(为了美观打印而进行缩进),name,value 分割标识符.
 美观模式下:Gson 创建 JsonWriter 时会设置 indent 为两个空格的缩进,separator为 : 后面紧跟一个空格.
 普通(简洁模式下): indent 设置为 null,separator 设置为 : 没有前置后置空格.
 
@@ -149,7 +185,11 @@ EMPTY_DOCUMENT(6) --JsonWriter#value 写入值-> NONEMPTY_DOCUMENT(7) --> close 
 EMPTY_DOCUMENT(6) --JsonWriter#beginObject--> 先将栈定元素替换成为 NONEMPTY_DOCUMENT,然后压栈 EMPTY_OBJECT --JsonWriter#name--> 栈不变,只将名称暂存进入deferredName -- JsonWriter#value --> 检查 name 写入是否符合条件,先替换栈顶状态由 EMPTY_OBJECT 为 DANGLING_NAME 等
 
 对应栈的状态变化:
-[EMPTY_DOCUMENT]-beginObject->[NONEMPTY_DOCUMENT,EMPTY_OBJECT]-name->[NONEMPTY_DOCUMENT,EMPTY_OBJECT]只写入name 不改变栈 -
+[EMPTY_DOCUMENT]-beginObject->[NONEMPTY_DOCUMENT,EMPTY_OBJECT]-name->[NONEMPTY_DOCUMENT,EMPTY_OBJECT]只写入name 不改变栈 -value-> [NONEMPTY_DOCUMENT,DANGLING_NAME]->[NONEMPTY_DOCUMENT,NONEMPTY_OBJECT]-> -endOject-> [NONEMPTY_DOCUMENT](如果写入多个值则重复上述 name/endOject 之间的状态栈变化)
+
+- JsonTreeWriter
+
+  JsonWriter 的子类,覆写了 beginArray,endArray,name,value 等方法,用于生成 JsonElement 的解析树.(*其内部的实现思路基本同 JsonWriter 只不过其 stack 是通过 JsonElement 的实现类型进行进行当前解析状态的标记,product 表示底层开始生成的元素*)
 
 ## ConstructorConstructor(对象构建)
 
@@ -177,8 +217,22 @@ ConstructorConstructor 创建 ObjectConstructor 的策略:
 
 只存在 ObjectConstructor#construct 调用该方法用于创建指定的对象,由 ConstructorConstructor#get 方法创建的匿名内部类,返回给调用者,用于被调用者用来构建指定对象.
 
+## TypeAdapterFactory/Excluder
+
+### Excluder
+
+实现了 TypeAdapterFactory 且优先级较高,用于过滤特定的类是否需要跳过序列化与反序列化.一旦某个某类要在序列化或者反序列化过程中被配置跳过,则 Excluder#create 会生成 TypeAdapter 代理底层类的序列化与反序列化,用于执行跳过操作.*因此 Excluder 这个特殊的 TypeAdapterFactory 被配置在 Gson#factories 的第三个,前面分别是 JsonElement,Object 类型的序列化与反序列化操作*
+
 ## Gson 库的设计决策
 
 [Gson 官方设计决策文档][https://github.com/google/gson/blob/master/GsonDesignDocument.md]
 
+## 特殊场景检测
 
+- InnerClass 引用外部类 this 作为自己的字段,导致序列化时存在循环引用导致 stackOverflow 溢出
+  
+  Gson 未检测,但是提供了是否序列化内部类的配置.
+
+- Bean 内部字段引用自己作为 Bean 内部字段的值导致序列化时的循环引用
+  
+  ReflectiveTypeAdapterFactory#BoundField#writeField 的实现类时做了该中场景的检测.
