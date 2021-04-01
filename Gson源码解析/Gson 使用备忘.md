@@ -24,13 +24,13 @@ Gson 是线程安全的,多个线程可以共享同一个 Gson 对象执行序�
 
 - null 字段的处理:
   
-  - 序列化时 null 字段会被葫芦
+  - 序列化时 null 字段会被忽略
 
   - 反序列化时 Json String 中不存在的字段,Object 中存在的字段会被设置为默认值.(object -> null, number type -> 0,boolean -> false)
 
 - 序列化/反序列化 合成字段会被忽略
 
-- 序列化/反序列化 内部类,匿名类,本地类指向外部类的字段会被忽略.
+- 序列化/反序列化 匿名类,本地类指向外部类的字段会被忽略.内部类是否忽略则根据 Excluder 即 GsonBuilder#disableInnerClassSerialization 的配置来进行.
 
 ## Gson 序列化/反序列化(嵌套类/内部类)
 
@@ -130,7 +130,7 @@ gson.fromJson(json, fooType);
 
 - InstanceCreator
 
-  反序列化时创建实例的方法,通常是不需要特殊定义 Bean 的创建方式,因为 Gson 对于没有定义 InstanceCreator 的类型默认采用默认的无参构造方法进行对象的创建.(*但是对于没有无参构造方法的类,内部类则需要通过定义 InstanceCreator 进行创建*)
+  反序列化时创建实例的方法,通常是不需要特殊定义 Bean 的创建方式,因为 Gson 对于没有定义 InstanceCreator 的类型默认采用默认的无参构造方法进行对象的创建.(*但是对于没有无参构造方法的类(如:接口,抽象类),内部类则需要通过定义 InstanceCreator 进行创建*)
 
 ## Compat/Pretty 输出 Json String
 
@@ -150,8 +150,7 @@ gson.fromJson(json, fooType);
 
   使用 Since/Until 注解时没有添加注解的字段始终会被序列化/反序列化.注解目前可以添加在 Field,Type(Class) 字段上用语标记 Field,Class 的版本号.
   
-  添加 Since Version < CurrentVersion 有效
-  添加 Until Version > CurrentVersion 有效
+  添加 Since Version < CurrentVersion < Until Version有效
 
 ## 序列化/反序列化 Exclude 支持
 
@@ -230,9 +229,13 @@ gson.fromJson(json, fooType);
 用于标记指定的类/字段使用指定的类型适配器.
 该注解的值可以是:TypeAdapter/TypeAdapterFactory/JsonSerializer/JsonDeserializer 或者其子类.(*不推荐一个类同时实现上述多个接口,如果实现上述多个接口优先级从高到低,该特性由源码分析得到*)
 
+最外层类上,自定义的 JsonAdapter 注解指定的 TypeAdapter 优先级低于 Gson 内置的类型 TypeAdapter 和 用户自定义的 TypeAdapterFactory,但是高于内置的 Enum 和 ReflectiveTypeAdapterFactory.
+
+定义在字段上的 JsonAdapter 高于注册在 Gson 内部的 TypeAdapter,其优先级是由内部的 ReflectiveTypeAdapterFactory#Adapter 的内部实现决定的.
+
 - @SerializedName
 
-用于标记指定字段序列化和反序列化时对应的名称.
+用于标记指定字段序列化和反序列化时对应的名称.其中 alternate 名称数组用于反序列化时该字段在 Json String 中可选的名称.*即序列化时一个 Bean 字段对应一个 Json String 中的字段,反序列化时一个 Bean 字段对应可选的对应的多个 Json String 中的字段,如果Json String 中多个字段对应一个 Bean 中的一个字段,则 Bean 中对应字段的值以最后一个 Json String 的值为其最终的值*
 
 - @Since/@Until
 
@@ -261,3 +264,44 @@ gson.fromJson(json, fooType);
 ### JsonParser
 
 将 Json 字符串解析生成 Json 解析树,树及树中的元素主要有 JsonElement 的子类:JsonArray,JsonNull,JsonObject,JsonPrimitive 主要方法有 parseString 解析字符串,parseReader,parseReader 分别解析 java.io.Reader 和 Gson 的 JsonReader
+
+### GsonBuilder#complexMapKeySerialization
+
+配置为 true ,序列化时,如 Key 为复杂类型(Object,Array) 则按照数组的方式进行序列化啊,而不是使用 toString 的方式进行Key 的序列化.
+
+```java
+Map<Point, String> original = new LinkedHashMap<Point, String>();
+original.put(new Point(5, 6), "a");
+original.put(new Point(8, 8), "b");
+System.out.println(gson.toJson(original, type));
+```
+
+false:
+
+```json
+ {
+   "(5,6)": "a",
+   "(8,8)": "b"
+ }
+```
+
+true: 解析成为二维数组,Map 为 Entry 的集合的格式.Entry 被解析为 K,V 的集合数组.
+
+```json
+[
+  [
+    {
+      "x": 5,
+      "y": 6
+    },
+    "a",
+  ],
+  [
+    {
+      "x": 8,
+      "y": 8
+    },
+    "b"
+  ]
+]
+```

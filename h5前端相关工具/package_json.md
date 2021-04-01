@@ -20,7 +20,7 @@ npm: /usr/bin/node /usr/lib/node_modules/npm/bin/npm-cli.js run start --scripts-
 
 yarn: /usr/bin/node /usr/share/yarn/bin/yarn.js run start
 
-上述的命令等同于使用 npm start,yarn start
+上述的命令等同于使用 npm start,yarn start (*直接执行 yarn start 其实是变相执行了 yarn 这个系统脚本,然后通过yarn 脚本启动了 node /usr/share/yarn/bin/yarn.js build 执行,实际上还是通过 yarn.js 执行 script 部分的 build,start 命令*)
 
 使用 npm 运行和yarn 运行分别通过 yarn.js npm-cli.js 分别进行解析当前根目录下的 package.js scripts 块定义的 start,build,test 等命令执行.
 

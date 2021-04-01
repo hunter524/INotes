@@ -8,6 +8,10 @@ gson 项目 init 提交 2008,fastjson,jackson 项目init 均为 2011.
 
 哪儿有岁月静好?只是有人在为我们默默负重前行! What I cannot create,I do not understand --by Richard Feynaman
 
+## Json/Json5
+
+  Json5 是 Json 的一个超集.Json 是存在 [RFC 7159][https://tools.ietf.org/html/rfc7159] 文档的,最新的文档为 [RFC 8259][https://tools.ietf.org/html/rfc8259]. Json5 是一个社区规范,是 Json 的一个超集,其[官网][https://json5.org/]
+
 ## 使用层面的 API
 
 - GsonBuilder
@@ -22,6 +26,10 @@ gson 项目 init 提交 2008,fastjson,jackson 项目init 均为 2011.
   
   实现这些接口,构造 Gson 时向 GsonBuilder 注册指定类型的序列化和反序列化操作.
 
+  注册序列化/反序列化分为两种方式: GsonBuilder#registerTypeHierarchyAdapter 和 GsonBuilder#registerTypeAdapter,前者表示当前类型的子类均使用注册的序列化/反序列化器,后者表示只有当前类型使用该序列化反序列化器.
+
+  JsonDeserializer/JsonSerializer: 为遗留的 API 较为古老,且在反序列化时会将 JsonReader 先解析成为 JsonElement 再交由 JsonDeserializer.序列化时则需要先解析 Object 成为 JsonElement 再交由 Streams#write 写入 JsonWriter. 因此存在中间步骤(冗余),所以效率相对 TypeAdapter 较低.*因此推荐使用 TypeAdapter 自定义序列化反序列化操作,除非同一种 Type 序列化和反序列化操作不需要同时进行自定义*
+
 - TypeAdapterFactory
   
   通过 GsonBuilder#registerTypeAdapterFactory 添加的 TypeAdapterFactory 后添加的优先级高于先添加,构建成 Gson 对象后会内置再添加 52 种内置的类型适配器(*内置的类型适配器位于 TypeAdapters*),用于 java 内置的类型进行序列化反序列化的转换.
@@ -29,15 +37,34 @@ gson 项目 init 提交 2008,fastjson,jackson 项目init 均为 2011.
   可以借助 Gson#getDelegateAdapter 跳过当前后配置的用于代理相同类型的 TypeToken 的 TypeAdapterFactory(*文档说无法代理基础类型long,int 等类型的转换器进行代理进行统计和增强功能!!!!实际测试可以统计基础类型的序列化/反序列化次数.参见 StaticIntAdapterMain!!!!*)
 
   TypeToken 与 TypeAdapter 的匹配策略: 初次匹配是通过遍历 Gson 中注册的 TypeAdapterFactory 并尝试通过这些 Factory 创建 TypeAdapter 如果创建的 TypeAdpater 非 null 则直接使用创建的 TypeAdapter 对该 TypeToken 进行转换,并建立 TypeToken 与 TypeAdapter 的缓存. 二次匹配则使用缓存进行匹配.
+  *使用者通过 GsonBuilder 自定义添加的 TypeAdapterFactory 优先级高于除 Excluder,JsonElement,Object 之外所有的内置的 TypeAdapterFactory*
 
 - InstanceCreator
   
-  注册指定类型的对象在反序列化时的创建方式而不是使用,默认的 ConstructorConstructor 中定义的创建方式创建 ObjectConstructor 从而进一步创建 Object 对象.
+  注册指定类型的对象在反序列化时的创建方式而不是使用,默认的 ConstructorConstructor 中定义的创建方式创建 ObjectConstructor 从而进一步创建 Object 对象.*GsonBuilder添加的 InstanceCreator 只被 ConstructorConstructor 持有,用于创建对象,ConstructorConstructor#get 返回的是用于创建对象的接口 ObjectConstructor 的实现*
 
 - FieldNamingPolicy/FieldNamingStrategy
   
   FieldNamingPolicy 为枚举常量,继承自 FieldNamingStrategy ,其内置了6中默认的 Json 序列化/反序列化的实现.(*具体使用方法参见 Gson 使用备忘*).使用者也可以通过自定义 FieldNamingStrategy 实现自己的命名策略应用于序列化与反序列化中.通过 GsonBuilder#setFieldNamingStrategy 和 GsonBuilder#setFieldNamingPolicy 设置命名策略,重复设置遵循 last wins 规则.默认构建的 Gson使用的命名策略为 FieldNamingPolicy#IDENTITY 即名称不做任何转换和映射.
+
+- Excluder
   
+  不需要序列化/反序列化的配置,同时也是一个 TypeAdapterFactory 实例,置于 TypeAdapterFactory 列表的第三个位置,置于 Excluder 前面的 TypeAdapterFactory 分别为 JsonElement,Object 对应的 TypeAdapterFactory.(*上述两种类型的序列化/反序列化 不遵守 Excluder 规则,对于 Object 类型,在序列化时会获取 Object 引用的对象的真实类型,从而获得 TypeAdapter,如果真实类型是 Object 序列化时则会直接输出 {},在反序列化是 Object 会被生成 LinkedTreeMap,JsonString 中的 List 会被生成 ArrayList,反序列化时调用 Gson#fromJson 需要传入类型,序列化是 Gson#toJson 则传入的是 Object 对象的引用*)
+
+### TypeAdapters
+
+Gson 内置的常用类型的序列化/反序列化适配类.
+
+不支持 Class,
+
+常用基础类型:boolean,byte,short,integer,long,float,double,character,string
+
+基础类型扩展类型:BitSet,AtomicInteger,AtomicBoolean,AtomicIntegerArray,Number,BigDecimal,BigInteger,StringBuilder,StringBuffer
+
+常用实用对象类型: URL,URI,InetAddress,UUID,Currency(世界货币编码,符合 ISO_4217 规范),Timestamp(Date 子类,处于 java.sql 包下),Calendar,Locale(地区编码),ENUM(枚举类)
+
+boolean 值的特殊之处:在 map 中将 boolean 类型通过 BOOLEAN_AS_STRING 转换成为 String 作为 Map 的 Key.
+
 ## 解析层面的源码
 
 ### TypeToken(java 泛型类型系统)
@@ -94,6 +121,8 @@ Gson#toJsonTree 获得 JsonElement 解析树抽象,使使用者自行面向解�
 
 反序列化过程中,用于标记即将被解析的字符多代表的 Json 的基础元素类型(如:beginArray,endArray,Number,Boolean,String,Null 等 JsonString 中的状态)
 
+在 JsonReader#peek 内部通常需要将 内部状态 PEEKED_BEGIN_OBJECT,PEEKED_XXX 转换成为 JsonToken 表示的状态进行返回.
+
 ### JsonScope
 
 在 序列化/反序列化 过程中标记 JsonString/Json 对象当前所处的限定的解析的状态的标记定义.
@@ -142,10 +171,68 @@ Gson#toJsonTree 获得 JsonElement 解析树抽象,使使用者自行面向解�
 
 Json String 反序列化的核心类,负责对Json String 进行解析返回 Bean 对象数据.
 *赋值的顺序由 JsonString 中字段的顺序主导,声明在前面的字段会先赋值给 Bean 对应的字段*
+*可以借助对于 CollectionTypeAdapterFactory,ReflectiveTypeAdapterFactory 对于集合,以及普通反射 Bean 数据的读取,反序列化方式进行 JsonReader 具体实现流程的分析*
+
+对于 JsonReader 存在如下语义化字符:
+
+对于未使用 ' " 包裹的值,字符串以下符号均属于语义化字符,不可以出现在 name,value 中:
+'/' , '\\' , ';' , '#' , '=' ,'{' , '}' , '[' , ']' , ':' , ',' , ' ' , '\t' , '\f' , '\r' , '\n' .
+*但是可以出现 ' " 单引号,双引号作为 name/value 的值*
+
+相反对于使用 ' " 单引号,双引号包裹的name/value 其中如同要出现 ' " 则需要使用 \ 进行转义. 如果值中出现 \ 自身则其也需要被 \ 进行转义.同时还需要被转义的还有 \uxxxx , \t , \b , \n , \r , \f , \ , / .
 
 - JsonReader
 
+可能存在的 Json 字符串样式:
+
+```json
+#comment
+//comment
+/*comment*/
+)]}'
+{
+  'a':'av'
+}
+```
+
+开头各种形式注解,外加不可执行前缀 )]}'\n
+
+buffer/limit/pos:
+
+buffer 为 JsonReader 自己的 byte[] 缓存,用于向 Reader 读取数据并且缓存在其中.pos 用于标记当前读取到的位置, limit 用于标记还可以读取的数据长度.
+
+lineNumber/lineStart:
+
+用于标记当前读取到的行号,以及当前行的开始位置.
+
+pathNames/pathIndices:
+
+pathNames:用于标记开始的对象的名称,pathIndices则用于标记 pathNames/pathStack 对应层的 对象/数组 的深度.(*即对象值的个数*)
+
+peek/doPeek:
+
+peek: 暴露给外部调用的 API,通过 doPeek 进行 Json String 的推进解析,同时将内部定义的 PEEKED_XXXX 状态转换成为 JsonToken 枚举类定义的 Json String 解析状态.
+
+doPeek:
+
+JsonString 字符串推进解析的核心操作,改变 stack 的状态,以及下一个将要被 peek 的字符代表的 Json String 语义(非字面字符 [ , ] , { , } , , , : , 等这些在 Json String 中有特殊语义的字符),同时为了提升效率会猜测 true,null,数字类型.*猜测类型的条件是在这些值没有被单引号,双引号这两个字符串进行包裹*
+
+nextNonWhitespace:
+
+跳过空白字符串 ' ','\n','\t','\r' 以及以下形式的注释 //explain ,/*exlain*/,#explain .
+注释处理: 如果存在 // ,# 则跳至行尾,忽略整行,如果以 '/*' 开头的注释则直接跳转到批评 '*/' 结尾处的注释,然后继续查找连续的空格和注释.
+
+consumeNonExecutePrefix:
+
+首先使用 nextNonWhitespace 跳过前置的空白和注释,然后消耗掉为了避免 CSRF 攻击而添加的 )]}\'\n 头.
+
+nextName/nextString/nextBoolean/nextNull/nextDouble/nextLong/nextInt
+
+nextName 用于获取对象的 key 值,其余的 nextXXXX 均为用于获取对象的值,
+
 - JsonTreeReader
+
+与 JsonTreeWriter 对应,其中 JsonTreeWriter 是用于读取 Json Object 生成 JsonElement,该处的 JsonTreeReader 则是用于读取 JsonElement 生成 Json Object.与 JsonReader 的不同之处在于 JsonReader 生成 Json Object 消耗的数据源为 Json String,JsonTreeWriter 消耗的数据源为 JsonElement(JsonArray,JsonObject,JsonPrimitive)
 
 #### JsonWriter
 
@@ -189,7 +276,7 @@ EMPTY_DOCUMENT(6) --JsonWriter#beginObject--> 先将栈定元素替换成为 NON
 
 - JsonTreeWriter
 
-  JsonWriter 的子类,覆写了 beginArray,endArray,name,value 等方法,用于生成 JsonElement 的解析树.(*其内部的实现思路基本同 JsonWriter 只不过其 stack 是通过 JsonElement 的实现类型进行进行当前解析状态的标记,product 表示底层开始生成的元素*)
+  JsonWriter 的子类,覆写了 beginArray,endArray,name,value 等方法,用于生成 JsonElement 的解析树.(*其内部的实现思路基本同 JsonWriter 只不过其 stack 是通过 JsonElement 的实现类型进行进行当前解析状态的标记,product 表示底层开始生成的元素*)*JsonTreeWrite 无法写入两个顶层值,因为 JsonElement 的数据结构设计没有添加对顶层值的支持*
 
 ## ConstructorConstructor(对象构建)
 
