@@ -28,7 +28,15 @@ JsonPath 是一种类似于 XPath 的 Json 查询语句表达式的规范.[其�
 
 其语法表达式[参见][https://github.com/json-path/JsonPath/blob/master/README.md]
 
-## JSON Facade 常用方法
+## JSON Facade 类
+
+### JSON Facade 类常用方法
+
+JSON 支持在 JSON String 中添加类型信息.如 TreeSetTest 中的序列化一个类可以添加类型信息,同样反序列化的字符串也可以支持带有类型信息.(*可以认为是 FastJson 对于 JSON 规范的一种自定义扩展,用语指示具体的泛型类型信息*)
+
+```java
+Assert.assertEquals("{\"@type\":\"com.alibaba.json.bvt.serializer.TreeSetTest$VO\",\"value\":TreeSet[]}", JSON.toJSONString(vo, SerializerFeature.WriteClassName));
+```
 
 - JSON#parse
   
@@ -36,7 +44,7 @@ JsonPath 是一种类似于 XPath 的 Json 查询语句表达式的规范.[其�
 
 - JSON#parseObject
   
-  转换为指定类型的 Bean
+  转换为指定类型的 Bean(转换成普通 Bean 需要携带 Bean 的类型参数).也可以通过 JSON#parseObject(String text) 不携带类型参数,则直接转换成为 JSONObject.(*其底层是依赖于 DefaultJSONParser#parse,DefaultJSONParser#parseObject,DefaultJSONParser#parseArray 实现的*) 传递类型信息则返回指定的类型的实例,不传递类型则返回原始的基础类型,Set,TreeSet,JSONObject,JSONArray 等基础类型.
 
 - JSON#parseArray
 
@@ -54,11 +62,77 @@ JsonPath 是一种类似于 XPath 的 Json 查询语句表达式的规范.[其�
 
   将指定的 Object 转换成为 JSONObject,JSONArray 甚至是 JSONString.
 
+### JSON 及其子类
+
+- JSONArray
+  
+- JSONObject
+
 ## 注解使用
 
 ### @JSONCreator
 
 ### @JSONField
+
+- ordinal(Since 1.1.42)
+  
+  用于标记对象内部字段序列化/反序列化时的顺序 -> JSONFieldTest_0
+
+- name
+  
+  序列化/反序列化时指定的该字段的名称,不使用该字段的属性名称(通常用于混淆类) -> AnnotationTest3
+
+- format
+  
+  序列化/反序列化时指定时间的格式 -> DateFieldTest4
+
+- serialize
+  
+  是否序列化
+
+- deserialize
+
+  是否反序列化
+
+- serialzeFeatures
+  
+  对特定字段指定序列化时的 SerialzeFeature.
+  TODO://JSON#toJsonString 时指定的 Feature 与 对某个特定的字段指定的 Feature 谁的优先级更高?
+  按照推测应该是注解的优先级更高
+
+- parseFeatures
+  
+  对特定字段提供反序列化时的 Feature.
+
+- label
+  
+  为 LabelFilter 提供过滤依据.
+
+- jsonDirect(Since 1.2.12)
+  
+  该字段不做 Bean -> JSON String 的解析,值直接写入结果中. -> JSONDirectTest
+
+- serializeUsing(Since 1.2.16)
+  
+  为指定字段指定 ObjectSerializer 执行序列化. 按照惯例该处配置的优先级 SerializeConfig#put 设置的 ObjectSerializer -> SerializeUsingTest.(优先级实现代码 FieldSerializer 274 Line)
+
+  该注解不可以注解在 Class 上,因此对于最外成的 Bean 依旧是从 SerializeConfig 中获取 ObjectSerializer.
+
+- deserializeUsing(Since 1.2.16)
+  
+  为指定字段指定 ObjectDeserializer 执行反序列化. 同上按照惯例优先级高于 ParseConfig#设置的 ObjectDeserializer -> SerializeUsingTest
+
+- alternateNames(Since 1.2.21)
+  
+  反序列化时指定的对应字段,在 JSONString 中的可选的名称.
+
+- unwrapped(Since 1.2.31)
+  
+  缩减对象层级,将当前字段中的元素,摊平到外成对象中. -> JSONFieldTest_unwrapped_0-6
+
+- defaultValue(Since 1.2.61)
+  
+  序列化时当某个字段为 null 时则采用该注解标记的默认值.(*只对对象类型有效,对于基础数据类型无效,因为基础数据类型即使不赋值,也存在默认值*)
 
 ### @JSONPOJOBuilder
 
@@ -96,49 +170,85 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
 
 ### 序列化过滤器(SerializeFilter)
 
-下述 8 种 SerializeFilter 均由 SerializeFilterable 持有并且管理交互流程.
+下述 8 种 SerializeFilter 均由 SerializeFilterable 持有并且管理交互流程.版本 1.2.10 之后,fastjson 通过 SerializeConfig#addFilter 支持以类级别添加 SerializeFilter(为了提升性能).同时也支持通过 JSON#toJSONString 整体进行过滤器的添加.
 
 - PropertyPreFilter
   
-  根据PropertyName判断是否序列化(通常还可以结合 SerialContext 与 name 判断特定 JSON Path 的名称的字段是否需要进行序列化)
+  *过滤字段是否需要序列化*
+  根据PropertyName判断是否序列化(通常还可以结合 SerialContext 与 name 判断特定 JSON Path 的名称的字段是否需要进行序列化),*apply 参数的 Object 值并非 name 所对应的 value 值,而是 name 所属的 Object 的值*
   
 - PropertyFilter
   
-  根据PropertyName和PropertyValue来判断是否序列化,相比 PropertyPreFilter 多了一个对应 key 的值.
+  *过滤字段是否需要序列化*
+  根据PropertyName和PropertyValue来判断是否序列化,相比 PropertyPreFilter 多了一个对应 name 的值.*同样的 object 参数同样为 name 与 value 所属的对象的值*
+
+  上述两个 Filter 均是用来过滤特定字段是否需要序列化.PropertyPreFilter 的实现为 2012/07 较 PropertyFilter 的实现 2011/07 晚.因此提供的功能更加强大(*可以根据 JSON Path 判断特定对象的 name 是否需要进行序列化*)
+
+  上述两个 Filter 的应用规则也是先 PropertyPreFilter(261 行) 再 PropertyFilter(293 行).
 
 - NameFilter
 
-  修改Key，如果需要修改Key,process返回值即可.其提供当前对象所在 Object,以及 Key 和 Value 值.
-  
+  *替换写入 JSON String 的 Name 值*
+  修改Key，如果需要修改Key,process返回值即可,不修改则返回 key 的原值即可.其提供当前对象所在 Object,以及 name 和 Value 值.(应用在 304 行)
+
 - ValueFilter
   
-  修改Value
+  *替换写入 JSON String 的 Value 值*
+  修改Value,不修改则原值返回.(应用在 307 行)
   
 - BeforeFilter
   
-  序列化时在最前添加内容,在 JavaBeanSerializer 中被使用
+  *在序列化 JSON String 对象最前面添加 name value 值*
+  序列化时在对象最前添加内容,在 JavaBeanSerializer 中被使用.(应用在 229 行)
   
 - AfterFilter
   
-  序列化时在最后添加内容,在 JavaBeanSerializer 中被使用
+  *在序列化 JSON String 对象最后面添加 name value 值*
+  序列化时在对象最后添加内容,在 JavaBeanSerializer 中被使用 (应用在 502 行)
 
 - ContextValueFilter
 
-  带有字段上下文信息的,修改 Value 的过滤器.
+  *替换写入 JSON String 的 Value 值*
+  带有字段上下文信息的,修改 Value 的过滤器.后面添加的 API 实现在 2016/04 ,前面的单纯的 ValueFilter 实现在 2011/07 (应用在 307 行,先 ContextValueFilter 再 ValueFilter)
 
 - LabelFilter
 
-  基于字段注解 JSONField#label 的值进行匹配, excludes 规则高于 includes 规则.
+  *过滤字段是否需要序列化*
+  通常建议应用分组过滤时添加该标签
+  基于字段注解 JSONField#label 的值进行匹配, excludes 规则高于 includes 规则. 同时未配置 label 的字段 label 则为空字符串,为空时该字段是否过滤依赖于 exclude/include 规则.空字符串不在 exclude 中则不过滤,空字符串在 include 中才输出.实现在 2015/08 .(应用在 262 行)
 
 ### 反序列化过滤器(ParseProcess)
 
+通过 JSON#parseObject 可以应用 ParseProcess 的序列化处理规则
+
 - ExtraProcessor
+  
+  用于处理多余的字段(多余字段定义: JSON String 中存在的字段,但是对应指定的 Bean 类型中并不存在的字段)
+  处理不存在的 name 和 value 值.
 
 - ExtraTypeProvider
 
-- PropertyProcessable
+  更改多余的字段的类型,然后再应用 ExtraProcessor.(多余的字段通常不是了行不同)
 
 - FieldTypeResolver
+  
+  反序列化过程中用于推测内部字段的类型,避免了基于 reflect api 进行类型判断的低效.
+
+  上述三个个接口可以同时实现,然后传递进入 JSON#parseObject 进行使用.
+
+- PropertyProcessable
+
+  Bean 实现该接口,用于处理 JSON String ,Bean 类型自己定义自己的反序列化过程.该类借助于 PropertyProcessableDeserializer 实现自己的反序列化过程.(2017/07 提供)
+
+- ExtraProcessable
+
+  Bean 类型实现该字段,用于处理反序列化时该 Bean 中不存在的字段.*实现 ExtraProcessable 的同时建议对称的实现 JSONSerializable 处理该 Bean 的序列化* (该 API 接口由 2016/04 提供)
+
+## 一些辅助功能
+
+- JSONPObject
+
+提供服务端便捷的返回 JSONP 格式的信息给 H5.(H5 通过 Script 标签请求数据,解决 ajax 请求无法跨域问题,被同源策略限制,但是存在 Cross-Site Request Forgery (CSRF) 攻击)
 
 ## 一些便捷之处(有趣的地方)
 

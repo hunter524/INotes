@@ -50,3 +50,7 @@ ParserConfig#createJavaBeanDeserializer,如果配置 java 平台支持 ASM 则�
 性能优化在于对于被构建对象的赋值操作,不使用 ASM 则需要通过 Field 提供的反射 API 进行字段赋值,使用 ASM 则直接可以使用生成字节码,直接访问被构建的对象字段和进行赋值.生成赋值的字节码相对使用使用反射 API 则性能更优.*然而对于 Android 平台这点优化并不能被使用*
 
 ### ParseContext
+
+## 泛型支持(TypeReference)
+
+等同于 Gson 的 TypeToken 通过 JDK 内置的 Class#getGenericSuperclass 获得已经被具化的泛型类的TypeReference 的泛型类型.
