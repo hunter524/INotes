@@ -72,11 +72,15 @@ Assert.assertEquals("{\"@type\":\"com.alibaba.json.bvt.serializer.TreeSetTest$VO
 
 ### @JSONCreator
 
+  当 Bean 缺乏默认构造函数时,使用该注解标记 构造方法/Bean 的静态方法 为构造该类的方法.*不能标记在类的普通方法上*
+  *被 JSONField 标记了参数的构造方法,等同于 JSONCreator 注解标记的构造方法.*
+  *在JavaBeanInfo 中优先查被该注解标记的构造方法,然后查找被该注解标记的静态工厂方法,最后查找未被注解标记的构造方法,作为构造该对象的方式* -> JSONCreatorTest
+
 ### @JSONField
 
 - ordinal(Since 1.1.42)
   
-  用于标记对象内部字段序列化/反序列化时的顺序 -> JSONFieldTest_0
+  用于标记对象内部字段序列化/反序列化时的顺序 -> JSONFieldTest_0 (*如果没有该字段标记,fastJson 默认使用字段名称的字母顺序进行排序*)
 
 - name
   
@@ -244,6 +248,12 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
 
   Bean 类型实现该字段,用于处理反序列化时该 Bean 中不存在的字段.*实现 ExtraProcessable 的同时建议对称的实现 JSONSerializable 处理该 Bean 的序列化* (该 API 接口由 2016/04 提供)
 
+## FastJson 中的扩展
+
+- Json 的循环引用
+
+[JSON 处理引用的语法][https://github.com/alibaba/fastjson/wiki/%E5%BE%AA%E7%8E%AF%E5%BC%95%E7%94%A8],Gson 对于循环引用则为配置不处理,或者直接引用循环引用解析导致 StackOverflow.
+
 ## 一些辅助功能
 
 - JSONPObject
@@ -253,3 +263,7 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
 ## 一些便捷之处(有趣的地方)
 
 - retrofit 内置提供了对于 gson,guava,jackson,java8,jaxb,moshi,protobuf,scalars,simplexml,wire 等数据格式的支持的 Converter,但是没有提供对于 fastjson 支持的 Converter.因此 fastjson 在其官方库 support 包中提供了对于 retrofit 的支持.
+
+- Android 端较多使用 Gson 而非 fastJson?
+  
+  因为 fastJson 的实现中嵌入了太多对于服务端框架的支持,如:serverlet,spring 等.
