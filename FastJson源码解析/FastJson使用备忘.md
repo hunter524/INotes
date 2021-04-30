@@ -32,7 +32,7 @@ JsonPath 是一种类似于 XPath 的 Json 查询语句表达式的规范.[其�
 
 ### JSON Facade 类常用方法
 
-JSON 支持在 JSON String 中添加类型信息.如 TreeSetTest 中的序列化一个类可以添加类型信息,同样反序列化的字符串也可以支持带有类型信息.(*可以认为是 FastJson 对于 JSON 规范的一种自定义扩展,用语指示具体的泛型类型信息*)
+JSON 支持在 JSON String 中添加类型信息.如 TreeSetTest 中的序列化一个类可以添加类型信息,同样反序列化的字符串也可以支持带有类型信息.(*可以认为是 FastJson 对于 JSON 规范的一种自定义扩展,用于指示具体的泛型类型信息,通过 @type 类型标记的值可以指定类型*)
 
 ```java
 Assert.assertEquals("{\"@type\":\"com.alibaba.json.bvt.serializer.TreeSetTest$VO\",\"value\":TreeSet[]}", JSON.toJSONString(vo, SerializerFeature.WriteClassName));
@@ -72,11 +72,13 @@ Assert.assertEquals("{\"@type\":\"com.alibaba.json.bvt.serializer.TreeSetTest$VO
 
 ### @JSONCreator
 
-  当 Bean 缺乏默认构造函数时,使用该注解标记 构造方法/Bean 的静态方法 为构造该类的方法.*不能标记在类的普通方法上*
-  *被 JSONField 标记了参数的构造方法,等同于 JSONCreator 注解标记的构造方法.*
-  *在JavaBeanInfo 中优先查被该注解标记的构造方法,然后查找被该注解标记的静态工厂方法,最后查找未被注解标记的构造方法,作为构造该对象的方式* -> JSONCreatorTest
+  当 Bean 缺乏默认构造函数时,使用该注解标记 构造方法, Bean的静态方法 为构造该类的方法.*不能标记在类的普通方法上*
+  *TODO://被 JSONField 标记了参数的构造方法,等同于 JSONCreator 注解标记的构造方法.*
+  *在JavaBeanInfo 中优先查找 Class 上 JSONType#builder 属性创建的Builder类 -> 默认构造方法 -> 被该注解标记的构造方法 -> 然后查找被该注解标记的静态工厂方法 -> 最后查找未被注解标记的构造方法,作为构造该对象的方式(查找策略在 JavaBeanInfo#build 方法中定义)*
 
 ### @JSONField
+
+该注解是用于添加在 方法(setter,getter),字段,构造方法,静态工厂方法的参数上(结合 JSONCreator 使用). 通常用于标记单个字段在序列化/反序列化时的特性定制.与 JSONType 注解相互呼应，JSONType 注解用于添加在类上，用于标记该类的序列化／反序列化特性定义．
 
 - ordinal(Since 1.1.42)
   
@@ -98,13 +100,13 @@ Assert.assertEquals("{\"@type\":\"com.alibaba.json.bvt.serializer.TreeSetTest$VO
 
   是否反序列化
 
-- serialzeFeatures
+- serialzeFeatures(SerializerFeature[])
   
   对特定字段指定序列化时的 SerialzeFeature.
   TODO://JSON#toJsonString 时指定的 Feature 与 对某个特定的字段指定的 Feature 谁的优先级更高?
   按照推测应该是注解的优先级更高
 
-- parseFeatures
+- parseFeatures (Feature[])
   
   对特定字段提供反序列化时的 Feature.
 
@@ -126,7 +128,7 @@ Assert.assertEquals("{\"@type\":\"com.alibaba.json.bvt.serializer.TreeSetTest$VO
   
   为指定字段指定 ObjectDeserializer 执行反序列化. 同上按照惯例优先级高于 ParseConfig#设置的 ObjectDeserializer -> SerializeUsingTest
 
-- alternateNames(Since 1.2.21)
+- alternateNames(Since 1.2.21,String[])
   
   反序列化时指定的对应字段,在 JSONString 中的可选的名称.
 
@@ -138,9 +140,102 @@ Assert.assertEquals("{\"@type\":\"com.alibaba.json.bvt.serializer.TreeSetTest$VO
   
   序列化时当某个字段为 null 时则采用该注解标记的默认值.(*只对对象类型有效,对于基础数据类型无效,因为基础数据类型即使不赋值,也存在默认值*)
 
-### @JSONPOJOBuilder
-
 ### @JSONType
+
+JSONType 注解用于添加在类上，用于标记该类的序列化／反序列化特性定义．
+
+- asm
+  
+  用于标记当前类型是否使用　ASM 优化，使用　ASM 优化则使用　ASMSerializerFactory／ASMDeserializerFactory 工厂类基于动态生成字节码分别创建　JavaBeanSerializer／ObjectDeserializer　避免对于　JDK 反射　API 的使用带来的低效率．*ASM 优化是否能使用不仅仅在于该标记为　true,还取决于该类的内在特性，如：带有泛型参数的类则不使用　ASM 优化．也取决于　JVM 平台是否支持动态定义类，如：Android 平台则不支持使用　ASM*
+
+- orders(String[])
+  
+  fastJson 在序列化时默认的字段排序顺序为字母表顺序，使用该字段可以定义自定义序列化完成的字段的顺序．*定义的名称的排序*
+
+- includes (1.2.6,String[])
+  
+  生效规则:*includes 对　getter 方法(get,is 开头的方法)生效，但是对于字段标记无效*
+  *具体策略的实现参见 TypeUtils#buildBeanInfo -> TypeUtils#computeGetters 先查找 getter 方法,再查找对应的字段*
+  *表示当前 Bean 序列化时被包含的 getter 方法值*
+
+  标记普通　JAVA Bean 时不影响序列化的结果．Bean 中的字段正常被序列化．使用　JSON＃addMixInAnnotations　的混入特性时原始　Bean 则只序列化混入类注解上标记的 includes 指定的字段．
+  
+- ignores
+
+  生效规则:*includes 对　getter 方法(get,is 开头的方法)生效，但是对于字段标记无效*
+
+  优先级为 includes > ignores(如果配置了 includes 则只会匹配 includes 规则,不在规则内的均会被忽略.未配置 includes 但是配置了 ignores 则对 ignores 规则进行匹配,在规则内的则均被忽略,否则则不会被忽略)
+
+  TODO:// 默认 private 的属性不会被序列化
+
+- serialzeFeatures
+  
+  为 Bean 特定的配置的序列化 SerializerFeature.
+
+- parseFeatures
+
+  为 Bean 配置的特定的反序列化的 Feature
+
+- alphabetic
+  
+  功能同　orders　为指示序列化为　JSONString 时字段在其中的顺序．orders 为指定顺序，不指定则为默认字母表顺序，该字段　false 表示用于取消默认的字母顺序，采用默认顺序(*即通常是字段的定义顺序*)
+
+- mappingTo
+
+  标记当前类型字段在反序列化时,反序列化为某个指定类型*所有字段标记为该类型的均会执行 mappingTo 的映射规则*(*通常是当前类的子类,其实现策略是基于 mappingTo 的类型重新查找 ObjectDeserializer 进行序列化任务的标记*).使用参见 AbstractSerializeTest2.
+  *为了确保类型安全通常是将指定父类的字段重新映射为其子类,即使该类型被 @type 字段标记了类型路径*
+
+- builder
+
+  指定对象反序列化时构建对象的 Builder 构造器.配合注解 JSONPOJOBuilder 使用,用于指定该对象的 Builder 构造模式.
+  *builder 指定的 Builder 类,默认使用 withXXX 设置指定属性(通过查看 JavaBeanInfo#build 634 line 源码得知,Builder 也默认支持 setXXX 用于属性设置的方法,set,With 后面指定的属性的值要求大写),使用 build 创建该 Builder 创建的对象,如果 build 不存在则也默认支持 create 方法(通过查看源码获得 create 方法的优先级低于 build 方法,只有当 build 方法不存在时才启用 create 方法)*
+
+  *Buidler 类中的方法可以使用 @JSONField 标记该构造方法,用于指定优先级和名称*
+
+  *指定 builder 则 Builder 的 withXXX,setXXX 方法扩展了对象的属性列表 JavaBeanInfo#fields*
+
+- typeName (1.2.11)
+  
+  typeName 配合 typeKey 使用,用于在序列化时标记 JSONString 对应的类型.如果不指定 typeKey 则默认的 typeKey 值为 @type 定义在 JSON#DEFAULT_TYPE_KEY 字段. *@type 因为不是一个合法的字段名称标识符,因此无法被反序列化,如果 typeKey 是一个 Bean 定义的合法的属性值则可以正常被反序列化*
+  *该属性被启用需要配置 SerializerFeature.WriteClassName 序列化标记*
+
+- typeKey (1.2.32)
+
+  用于指定序列化类型时 对 @type 进行重新命名.目前存在 [Bug][https://github.com/alibaba/fastjson/issues/3479] 父类存在想对应的 typeKey 字段且 typeKey 字段的名称即为 typeKey 会导致反序列化失败.直接返回 null.
+
+- seeAlso (1.2.11)
+  
+  反序列化时 JSON#parseObject 指定类型为父类时,父类通过 seeAlso 用于指定可能存在的子类型,需要配合 typeName 注解值和 JSONString 中的 @type 标记进行类型推测和匹配.
+  *实现则是依赖于 typeName 进行对应的 JavaBeanDeserializer 的反序列化的类型的匹配*
+
+- serializer
+  
+  用于对指定类型标记注解使其使用特定的 ObjectSerializer 进行序列化操作
+
+- deserializer (1.2.14)
+  
+  对应于 serializer 用于指定反序列化的 ObjectDeserializer.
+
+- serializeEnumAsJavaBean
+  
+  用于标记 enum 类是否当作普通 Bean 进行序列化.*因为枚举类实质为可数的静态常量对象,通常使用名称则可以获取实例,因此在 Gson fastJson 的默认实现中均为 false,通过 toString 序列化反序列化该类*
+
+- naming
+  
+  用于选择 PropertyNamingStrategy 的枚举的命名策略.
+
+- serialzeFilters (1.2.49)
+  
+  为该类型指定特殊的过滤器.
+
+- autoTypeCheckHandler (1.2.71)
+
+  基于 @type 的反序列化时的类型检查.用于限制未知类型的 @type 类型注解字符串导致的安全问题.
+  *ParserConfig#addAutoTypeCheckHandler 如果不添加 ParserConfig#AutoTypeCheckHandler 则 @type注解标记的类型参数无法被识别和通过 [auto type 对应的配置参见][https://github.com/alibaba/fastjson/wiki/enable_autotype]*
+
+### @JSONPOJOBuilder (1.2.8)
+
+配合 JSONType#builder 使用,用于重新定义 Builder 构造方法的默认属性设置方法(with 前缀,set 前缀),Builder 模式的默认对象创建方法(build 方法,creat 方法).
 
 ## 基础配置
 
@@ -156,13 +251,112 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
 
 ### Feature 特性配置
 
-- SerializerFeature
+#### SerializerFeature 配置对应语义
 
 序列化配置.
 
-- Feature
+#### Feature 配置对应语义
 
 与序列化对应的反序列化的配置.
+
+- AllowArbitraryCommas
+  
+  允许在 JSONString 中有多个任意的 , 也认为是合法的 JSON.如:{,,,"value":null,,,,},{,,,"value":null,"id":123,,,,}
+
+- AllowComment
+  
+  允许在 JSONString 中存在 /**/ // 等注解信息也认为是合法的 JSONString 可以正常进行反序列化
+
+- AllowISO8601DateFormat
+  
+  在默认的集中时间格式对于时间字符串解析失败时,配置了该属性则尝试使用 ISO8601 规范对该时间字符串进行解析.*内置的时间反序列化解析逻辑在 AbstractDateDeserializer#deserialze 方法中*
+
+  内置的时间解析类为 DateCodec,SqlDateDeserializer 用于将时间字符串分别解析为 java.util.Date 与 java.sql.Date.
+
+- AllowSingleQuotes
+  
+  按照 JSON 的规范,name 值是需要被 "" 包裹的 如:{"a":3} 是一个合格的 JSONString. 但是 {'a':3} , {a:3} 并非是一个合格的 JSONString,配置该属性允许  {'a':3} 可以正常被反序列化.
+
+- AllowUnQuotedFieldNames
+  
+  同 AllowSingleQuotes,只不过该标志位是允许 {a:3} 成为一个合格的 JSONString 可以被正常解析.
+
+- AutoCloseSource
+
+  不等同于 JSONReader/JSONWriter 的 Stream Api,用于处理 in/out 流的关闭操作.
+  该标志位的设置主要是用于在 JSONString 解析结束时最后一个 token 是否为 JSONToken#EOF,如果不是且设置了该标志位则抛出 JSONException 异常.
+
+- CustomMapDeserializer
+- DisableASM
+
+　用于标志禁止使用　ASM 进行优化．
+
+- DisableCircularReferenceDetect
+  
+  禁止循环引用检测．*TODO://fastjson 是在什么地方执行循环引用检测的？*
+
+- DisableFieldSmartMatch
+
+  禁止在查找字段的 FieldDeserializer 时使用性能更高的基于字段名称的 fnv1a_64 hash 值的二分查找.
+
+- DisableSpecialKeyDetect
+  
+  对于特殊的引用 key 如 $ref,@xxx,@type,.. 只是当普通键值进行处理.而不是递归查询引用,将引用的值放入构建的对象中.
+
+- ErrorOnEnumNotMatch
+- IgnoreAutoType
+  
+  用于配置该次反序列化忽略 @type,typeKey,typeName 指定的 type 类型.采用配置类型进行序列化与反序列化.
+
+- IgnoreNotMatch
+  
+  如果 JSONString 存在多余的 key,在 Bean 中不存在对应的 Field 则配置了该特性才可以正常解析,否则会报出 JSONException setter not found.
+
+- InitStringFieldAsEmpty
+
+　配置则初始化　String 字段为　"" 而不是　null 引用．
+
+- InternFieldNames
+  
+  用于调用 String#intern (将字符串放入常量池,用于节省相同字符串的内存空间占用).*目前较新版本的 JVM 默认字符串均会放入常量池,并且对相同的字符串引用相同的常量对象,因为 String 是不可变对象*
+  *!!!所以目前并未发现 fastjson 使用该标志位做什么特殊操作,因此使用与不使用该标志位并没有什么差别!!!*
+
+- NonStringKeyAsString
+  
+  用于在解析成为 JSONObject 对象时将非 String 类型(通常是数字类型,false,true)的 key 转换为 String 存储进入 JSONObject.
+  *但是实际测试配置与不配置该属性对于 Issue1633 并无影响,当使用 JSONObject#get 取不到值时如果 key 类型为 Number,Character,Boolean,UUID 则转而会调用 toString 之后再次取值*
+
+- OrderedField
+  
+  对反序列化得到的值进行排序．Bean 的反序列化该特性并没有什么用．主要用于对　JSONObject,Collection,Set,Map 反序列化时排序的意义较大．(*排序主要基于 LinkedHashMap,默认使用方式为使用插入的先后进行排序,而不是使用访问顺序进行排序*)
+
+- SafeMode
+- SortFeidFastMatch
+  
+  反序列化时假设　JSONString 字段是按照字母顺序排列好的，因此在反序列化时利用该特性可以对性能进行提升．(＊后面源码里面并没有特殊处理这个标志位，怀疑已经被废弃＊)
+
+- SupportArrayToBean
+  
+  将 ["aaa","vvvv"] 按照字段的默认顺序，指定顺序，字母顺序　对应解析到　Bean 的字段中．
+
+- SupportAutoType
+
+  用于配置该次序列化支持 @type autoType 类型注解.(*通常用于在系统配置为不支持 autoType 时,用于当次序列化特殊配置支持 autoType 类型*)
+
+- SupportNonPublicField
+  
+  支持非 public 字段的序列化与反序列化.(*默认 fastjson 不支持非 public 字段,且没有 setter,getter 方法的Bean 的序列化与反序列化*)
+  *如果字段是非 public,但是具有 public 的 setter/getter 也认为是 public 字段*
+  *但是序列化时却不支持配置非 public 字段支持序列化,为什反序列化时支持非 public 字段支持反序列化?*
+
+- TrimStringFieldValue
+- UseBigDecimal
+  
+  NumberDeserializer 用于解析 byte,float,double 及其 boxed 类型.额外还提供对于 Number 类型的解析,*Number 作为抽象类并没有具体实现,因此在解析时遇到需要改类型的字段则需要 fastjson 进行决策提供实现,配置了该属性则统一使用 BigDecimal 的实现进行返回,如果未配置则提供 Double 类型的实现返回*
+
+- UseObjectArray
+
+  配置了该属性,使用 JSON#parse 进行的反序列化,内部的 JSONArray 表示均会转换成为 Object[] 的数组形式.
 
 ### PropertyNamingStrategy
 
@@ -171,6 +365,10 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
 ### TypeReference
 
 ### ObjectSerializer/ObjectDeserializer
+
+- JavaBeanSerializer/JavaBeanDeserializer
+  
+  默认的通用的 JAVA Bean 的序列化器与饭序列化器.该 Bean 如果在 PC JVM 平台如果支持 ASM 优化则通过 ASMSerializerFactory/ASMDeserializerFactory 创建继承自 JavaBeanSerializer/JavaBeanDeserializer 经过优化的 ASM 版本.
 
 ### 序列化过滤器(SerializeFilter)
 
