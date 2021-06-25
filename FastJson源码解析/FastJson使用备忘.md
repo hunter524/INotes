@@ -17,6 +17,7 @@
 -TO(Transfer Object) ，数据传输对象,在应用程序不同 tie( 关系 ) 之间传输的对象.
 
 - BO(business object) 业务对象,从业务模型的角度看 , 见 UML 元件领域模型中的领域对象。封装业务逻辑的 java 对象 , 通过调用 DAO 方法 , 结合 PO,VO 进行业务操作。 business object: 业务对象 主要作用是把业务逻辑封装为一个对象。这个对象可以包括一个或多个其它的对象。 比如一个简历，有教育经历、工作经历、社会关系等等。 我们可以把教育经历对应一个 PO ，工作经历对应一个 PO ，社会关系对应一个 PO 。 建立一个对应简历的 BO 对象处理简历，每个 BO 包含这些 PO 。 这样处理业务逻辑时，我们就可以针对 BO 去处理。
+*BO 是一种聚合的概念*
 
 - POJO(plain ordinary java object) 简单无规则 java 对象,纯的传统意义的 java 对象。就是说在一些 Object/Relation Mapping 工具中，能够做到维护数据库表记录的 persisent object 完全是一个符合 Java Bean 规范的纯 Java 对象，没有增加别的属性和方法。我的理解就是最基本的 Java Bean ，只有属性字段及 setter 和 getter 方法！。
 
@@ -24,9 +25,250 @@
 
 ## JsonPath
 
+门面类,负责对于 JSONString,JSONObject 按照 JSONPath 的查询语法进行 JSONString/JSONObject 中指定字段的解析和抽提.
+
+避免了当要处理多个未知对象时需要使用者手动遍历对象属性,提取值的操作.为遍历不同对象的指定的 key 的值提供了一种便捷的操作.
+
+JSONPath 是一种匹配模式的抽象,一个 JSONPath 可以用于多个 JSONString/JSONObject 的抽象.*线程安全性,由JSONPath 使用一个线程安全的 MAP 存储 JSONPath 对象以供相同的 path 进行缓存使用,可以推测 JSONPath 为 线程安全*
+
+JSONPath 的匹配查询结果的表示方式均为 List(集合方式),因此不能像 JSON#toJSONString 一样支持单个如 int,String 对象的选择匹配操作.JSONPath 支持 Bean Object,Map,Collection 的查询操作,不支持 int,String 等单数据对象的查询操作.
+
 JsonPath 是一种类似于 XPath 的 Json 查询语句表达式的规范.[其较早的java 实现库][https://github.com/json-path/JsonPath], 目前 FastJson 通过内置的 JSONPath 默认支持该特性.
 
 其语法表达式[参见][https://github.com/json-path/JsonPath/blob/master/README.md]
+
+### JSONPath Api
+
+- new JsonPath
+  
+  无缓存的 JSONPath 构建.
+
+- compile
+
+  编译指定的 path 路径成为 JSONPath,并且提供缓存策略,避免对于相同的 path 重复构建 JSONPath.*缓存最大为 1024个 path大于该值则不再缓存 path 对应的 JSONPath*
+
+- eval/read
+  
+  静态方法传入 path 和 Object/JSONString 直接提取指定的路径的值.即使传递 JSONString 底层的调用逻辑也会将 String 解析成为 JSONObject 进行提取操作.
+
+  eval 存在对应的实例方法,避免了 path 的重复传入.
+
+- extract
+
+  静态方法传入 path 和 JSONString,直接在 JSONString 语法层面进行 path 指定路径的提取,因此更加高效.*但是并不是所有的匹配类型均支持 extract 进行匹配,如:有引用类型,type(),floor() 等类型的匹配 Segment 则不支持 extract 类型匹配,其会退化成为 eval 类型匹配,其他类型如:[1:10:2] range Step 类型的匹配则直接不支持 extract,退化并且抛出异常.*
+
+  存在对应的实例方法,避免了 path 的重复传入
+
+- size
+  
+  静态方法传入 path 和 Object,获得指定 path 匹配到的属性的个数.
+
+  存在对应的实例方法,避免了 path 的重复传入
+
+- keySet
+
+  静态方法传入 path 和 Object,获得指定 path 对应的 key 的值.
+
+  存在对应的实例方法,避免了 path 的重复传入
+
+- paths
+
+  传入 Object 用于获取该 Object 中每个属性对应的路径.属性路径采用 / 作为分割符号.
+
+- contains/containsValue
+  
+  判断指定的路径是否存在值
+  判断指定的路径的值是否与指定的值是否相等,通过 Object#equals 进行判断.
+
+  存在对应的实例方法,避免了 path 的重复传入
+
+---下面是涉及到 JSONPatch 相关的方法 ---
+
+- arrayAdd/patchAdd
+  
+  array 向指定集合,数组添加元素,或者替换指定属性的值.
+
+  patchAdd 是 arrayAdd 同类的实例方法.
+
+- remove
+  
+  删除指定 path 对应的值,如果是 JOBO 则将对应的字段置为空.
+
+  存在对应的实例方法,避免了 path 的重复传入
+
+- set
+  
+  设置/修改指定的路径对应的值.
+  
+  存在对应的实例方法,避免了 path 的重复传入
+
+### JSONPath 语法
+
+fastJson 的 JSONPath 语法与通用的标准 [JSONPath][https://github.com/json-path/JsonPath] 略有不同.其对于标准的 JSONPath 做了扩展和优化.该处的 path 规则扩展是由 JSONPath 内部的各种功能 Segment 实现的.
+
+如:
+
+```json
+  [
+    {
+      "type"  : "iPhone",
+      "number": "0123-4567-8888",
+      "count":1
+    },
+    {
+      "type"  : "home",
+      "number": "0123-4567-8910",
+      "count":2
+    }
+  ]
+```
+
+在 fastJson 的匹配规则中,作为表示根元素的 $ 符合可以前置省略.
+
+匹配第0个元素:
+
+标准写法: $.[0] fastJson: [0]
+
+范围匹配:
+
+标准写法: $.[0:1] fastJson: [0:0] *标准 JSONPaht end 是 exclusive 的,fastJson end 则是 inclusive ,start 均是 inclusive*
+
+条件过滤:
+
+标准写法: $[?(@.count > 1)] fastJson: [count > 1] *简化了对于 @表示当前字符的表示,同时也省略了 $ 对于根元素的表示*
+
+fastJson 简化了对于数组对象,条件匹配 @ 表示待处理对象的语法.(*但是 fastJson 支持 @表示的匹配语法*)
+
+JSONPath 匹配的基础:
+
+- 一些特殊的语法表示的含义
+  
+  $..[  与 $.[
+  
+  在 fastJson 中表示 object only ,递归提取当前元素以及其内部的子元素进入顶层,只要该元素是 Array/Object 而不是基础数据类型,从而进一步可以对提取到的元素进行匹配如: $.[.city
+
+  $.[\*]
+  $..\*
+  $..[\*]
+  
+  递归提取当前对象中的元素,进入顶层.与 $.[ 的区别为 $.[ 为粒度只到对象层级,而 $.[\*] 力度到字段层级. *$..\* 与 $.[\*] 与 $..[*] 三者等价具有相同的语义*
+
+  $.[\*] 一个 [] 等价于代替了一个 . 属性的引用.
+
+  $[\*]
+
+  与 $.[\*] 的区别为不递归提取子元素的属性到顶层,只提取当前 $ 所表示的元素进入顶层.
+
+- 属性名称匹配(跨层级查找,逐层级查找)
+  
+  $.name
+  $..name
+  $['name']
+  $['address']['province']
+  $['id','name']
+  用于匹配同一个对象的多个属性值,属性值之间使用 , 进行分割.
+  name
+  *匹配根元素的属性值可以省略 $ 作为根元素的引用,直接使用属性名称进行匹配*
+
+  特殊属性名称的场景,参见 JSONPath_4 如: JSONString 为 {"key":"value","10.0.1.1":"haha"} 需要匹配 10.0.1.1 作为属性名称的值则规则的匹配模式会写成 $.10\.0\.1\.1 其中的 . 需要使用 \ 进行转义.
+
+  如果 $ 表示的是 Bean 则直接获取 Bean 中的属性名称. *如果 $ 表示的是 List 则为获取 List 每个 Bean 属性为指定名称的值,如果 $ 表示 List ,且 List 中的某项依旧为 List 则递归向下查找,直到 List 为空或者 List 中的元素不再为 List,Array 的处理方式与 List 相同* *在标准的 JSON 中则不支持该语法,需要先对 $ 根元素进行范围匹配,才能对其中的元素进行属性匹配如: $[0:].firstName*
+
+- 数组范围匹配
+  
+  [1] => index
+  [-1] => length - index
+  [1,2,3] => indexs
+  [1:2] => start end (start inclusive end inclusive)
+  [0:8:2] => start end step
+  [:4] => 0 to end
+  [1:] => 1 to length
+  *对于 path 直接是 0,+1,-1 等数字表示则直接获取对象以该数字为key的元素*
+
+- 属性值条件匹配
+  
+  JSONPath 的传统规范写法: $[?(@.key > 123)] *推荐使用*
+  fastJson 可以去掉 中括号,?,@ 和 小括号 写成 : $[key > 123]
+  也可以只去掉中括号 写为 : $?(@.key > 123) *推荐使用*
+
+  ?,[key > 123] 等的条件匹配是先会抽象成为一个 FilterSegment 的 Segment 再内嵌各种 Filter 形成的一个匹配规则.
+
+  *? 条件匹配符号后面只能跟着 () 并且必须跟着 ()且不能存在空格字符, 不能使用 []*
+
+  上述三种写法均可以使用 && || 链接表示 and 和 or 操作,Filter 通过 FilterGroup 进行嵌套处理,采取的策略是类似 reduceLeft 的规则进行匹配处理.
+
+  *推荐使用 [?(key>123) &&(id > 100)] 将多个匹配条件进行分组组合条件进行匹配,不推荐使用 [key > 123] && [id > 100] 的方式进行匹配,!!!!没*
+
+  *特别需要注意:$.name.?(@.key > 123) 这种写法是否不支持的, . 标记后面不能跟着 ? 条件匹配.*
+
+  上述三种写法 fastJson 都予以很好的支持.
+
+  多层嵌套的属性值条件匹配: $.address.[?(@.city = 'Nara')]  <==> $.address[?(@.city = 'Nara')] <==> $.address?(@.city = 'Nara') *可以用 . 作为层级区分再嵌套 [] 作为筛选条件的表达式,也可以直接使用 [] 包裹条件表达式,但是该种表达式在 fastjson 中无法被识别,同样的 $.address?(@.city = 'Nara') 表达式在标准的 JSONPath 中无法被识别*
+
+  *!!!!在 fastJson 中不支持 $.address.[?(@.city = 'Nara')] 这种冗余的写法,其会抛出异常,因为在 JOSNParser#readSegment 983行的解析要求读取到 . 后面需要跟一个 合法的name 而 [ 不是一个合法的name!!!,因此不能采用这种写法*
+
+  *只有 $.address[?(@.city = 'Nara')] 这个表达式才可以既在 fastJson 中被识别,也可以被标准的 JSONPath 识别*
+
+  *$.address?(@.city = 'Nara') 的 FastJson 简写的写法无法在 标准的JSONpath 中被识别*
+
+  like,not like,rlike , not rlike ,in,notin,between,not between 的常见写法:
+
+- like/not like
+
+  只支持 '%' 通配符.其可以位于开始,中间,末尾等任何位置.其可以通配 0-n 个字符.即其可以匹配字符,也可以不匹配字符.
+
+  *like 只能对字符串进行匹配,无法匹配其他数据类型*
+  
+  [key like 'aa%']
+  [key rlike 'regexpr']
+
+- rlike/not rlike
+  
+  使用 regex 的匹配模式和规则对字符串进行规则匹配.
+
+  *rlike,like,not rlike,not like 由于是字符串匹配模式,因此需要使用 ' " 将匹配模式字符串进行包裹*
+
+- in/notin
+  
+  $.departs[name in ('wenshao','Yako')]
+  $.departs[id not in (101,102)]
+
+  in ,not in 支持 int(可以转换成为 int 的类型:byte,short,long)类型 和 String 类型的规则匹配.
+
+  *in ,not in 表示的集合必须是同一种类型,不可以是不同的类型*
+
+- between/not between
+  
+  *between , not between 目前只支持 byte,short,int,long*
+
+  $.departs[id between 101 and 201]
+  $.departs[id not between 101 and 201]
+
+- 引用匹配
+  
+  使用引用匹配可以匹配当前对象的某个指定 path 所获取的值.*但是目前只支持 int,long,short,byte 以及 BigDecimal 的数字类型,同时支持的操作符只支持 ==,!=,>=,<=,>,< 几种类型*
+
+  匹配条件支持 >,<,!=,=,>=,<=,in,not in(nin),like,rlike,between, =~ 在多个条件需要匹配时支持如下 && || 写法用于匹配两个条件 and 和 or . 如:$.* ? (@.type() == "array" && @.size() > 1) 还可以使用 () 用于表示每一个匹配条件的层级如 :$.\*?( (@.type() == "array") && (@.size() > 1))
+
+  $[?(@.c =~ /a+/)] 正则匹配也可以写成该种形式, ~ 表示正则规则,加空格再加 /a+/ 表示匹配规则.参见 JSONPath_15#test_3
+
+- 扩展属性展示
+  
+  size,length: 表示获取到匹配的结果的长度
+  max,min:表示获取匹配的值中的最大值与最小值*只支持数字类型的集合*
+  keySet: 匹配的结果需要是 Map 获取其值的集合,或者是 POJO 用于获取其 Bean 的属性名称的集合.*不支持集合类型*
+  type: 表示获取匹配到的值的类型,返回的类型为字符串,*支持 js 所表述的类型,如:number,boolean,string,object 额外扩展了对于 null,array 的区分,在 js 中该两种类型均会识别为 object*
+  floor: 向 -Infinity 取最大的整数(不能大于当前数字)*支持数字类型,或者数字类型的集合*
+
+- 数组值添加,属性值更改
+
+JSONPath 使用的场景情况较为复杂,因此测试用例较多,在 test 的 com.alibaba.json.bvt.path 包下.
+
+JSONPath 常用写法:
+
+- $..[*].foo.bar
+
+等同于 $..foo.bar 表示匹配对象任意曾的 foo.bar 的引用.
 
 ## JSON Facade 类
 
@@ -257,7 +499,7 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
 
 #### Feature 配置对应语义
 
-与序列化对应的反序列化的配置.
+反序列化的配置. fastJson 通过 JSON#DEFAULT_PARSER_FEATURE 字段设置反序列化的默认配置为:AutoCloseSource,InternFieldNames,UseBigDecimal,AllowUnQuotedFieldNames,AllowSingleQuotes,AllowArbitraryCommas,SortFeidFastMatch,IgnoreNotMatch
 
 - AllowArbitraryCommas
   
@@ -275,7 +517,7 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
 
 - AllowSingleQuotes
   
-  按照 JSON 的规范,name 值是需要被 "" 包裹的 如:{"a":3} 是一个合格的 JSONString. 但是 {'a':3} , {a:3} 并非是一个合格的 JSONString,配置该属性允许  {'a':3} 可以正常被反序列化.
+  按照 JSON 的规范,name 值是需要被 "" 包裹的 如:{"a":3} 是一个合格的 JSONString. 但是 {'a':3} , {a:3} 并非是一个合格的 JSONString,配置该属性允许  {'a':3} 可以正常被反序列化.*如果不配置对应的特性则在反序列化时如果遇到上述 JSONString 则会报错 JSON Syntax Error*
 
 - AllowUnQuotedFieldNames
   
@@ -287,6 +529,9 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
   该标志位的设置主要是用于在 JSONString 解析结束时最后一个 token 是否为 JSONToken#EOF,如果不是且设置了该标志位则抛出 JSONException 异常.
 
 - CustomMapDeserializer
+  
+  基于 [issue 1653][https://github.com/alibaba/fastjson/issues/1653] 添加的特性,主要用于全局使用解析为 JSONObject 时创建的 Map 为特定类型的 Map. 如:大小写不敏感的 Map(org.apache.commons.collections4.map.CaseInsensitiveMap)
+
 - DisableASM
 
 　用于标志禁止使用　ASM 进行优化．
@@ -304,6 +549,9 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
   对于特殊的引用 key 如 $ref,@xxx,@type,.. 只是当普通键值进行处理.而不是递归查询引用,将引用的值放入构建的对象中.
 
 - ErrorOnEnumNotMatch
+
+  当反序列化的 Bean 中的字段是 Enum 类型时,基于 Enum 字符串匹配 Enum 常量未匹配到时抛出异常.(*基于 Enum 名称匹配 Enum 常量时是大小写不敏感的,具体参见 Issue 2249*)
+
 - IgnoreAutoType
   
   用于配置该次反序列化忽略 @type,typeKey,typeName 指定的 type 类型.采用配置类型进行序列化与反序列化.
@@ -331,9 +579,12 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
   对反序列化得到的值进行排序．Bean 的反序列化该特性并没有什么用．主要用于对　JSONObject,Collection,Set,Map 反序列化时排序的意义较大．(*排序主要基于 LinkedHashMap,默认使用方式为使用插入的先后进行排序,而不是使用访问顺序进行排序*)
 
 - SafeMode
+  
+  由于 @type ,自动类型在实践中出了很多的安全问题,因此添加了该属性用于在解析时禁止 @type, JSONType#typeName JSONType#typeKey.(从而避免因为动态类型反射导致的安全问题)
+
 - SortFeidFastMatch
   
-  反序列化时假设　JSONString 字段是按照字母顺序排列好的，因此在反序列化时利用该特性可以对性能进行提升．(＊后面源码里面并没有特殊处理这个标志位，怀疑已经被废弃＊)
+  反序列化时假设　JSONString 字段是按照字母顺序排列好的，因此在反序列化时利用该特性可以对性能进行提升．(＊后面源码里面并没有特殊处理这个标志位，!!!怀疑已经被废弃!!!＊)
 
 - SupportArrayToBean
   
@@ -350,12 +601,16 @@ FastJson 的配置策略是 JSON facade 类,主要功能类与配置进行抽离
   *但是序列化时却不支持配置非 public 字段支持序列化,为什反序列化时支持非 public 字段支持反序列化?*
 
 - TrimStringFieldValue
+  
+  为 [issues 3279][https://github.com/alibaba/fastjson/issues/3279] 添加的属性,用于将 String 类型的字段的值前后空格进行 trim 操作.
+
 - UseBigDecimal
   
   NumberDeserializer 用于解析 byte,float,double 及其 boxed 类型.额外还提供对于 Number 类型的解析,*Number 作为抽象类并没有具体实现,因此在解析时遇到需要改类型的字段则需要 fastjson 进行决策提供实现,配置了该属性则统一使用 BigDecimal 的实现进行返回,如果未配置则提供 Double 类型的实现返回*
 
 - UseObjectArray
 
+  基于 [ISSUES 423][https://github.com/alibaba/fastjson/issues/423] 添加的对于该特性的支持.
   配置了该属性,使用 JSON#parse 进行的反序列化,内部的 JSONArray 表示均会转换成为 Object[] 的数组形式.
 
 ### PropertyNamingStrategy
